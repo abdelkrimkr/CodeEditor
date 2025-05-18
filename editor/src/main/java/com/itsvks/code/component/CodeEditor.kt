@@ -3,7 +3,6 @@ package com.itsvks.code.component
 import android.content.ClipData
 import android.graphics.Paint
 import android.graphics.Typeface
-import android.text.method.MetaKeyKeyListener.handleKeyDown
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -29,7 +28,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -58,6 +56,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.toClipEntry
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -67,18 +66,16 @@ import com.itsvks.code.core.Direction
 import com.itsvks.code.core.TextPosition
 import com.itsvks.code.core.TextPositionRange
 import com.itsvks.code.input.codeEditorTextInput
-import com.itsvks.code.rememberCodeEditorState
 import com.itsvks.code.rendering.drawEditorContent
 import com.itsvks.code.syntax.SyntaxHighlighterFactory
 import com.itsvks.code.util.isPrintable
 import kotlinx.coroutines.delay
-import java.io.File
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CodeEditor(
+    state: CodeEditorState,
     modifier: Modifier = Modifier,
-    state: CodeEditorState = rememberCodeEditorState(File.createTempFile("editor", "kt").absolutePath),
     fontSize: TextUnit = 14.sp,
     lineHeight: Dp = 20.dp,
     gutterWidth: Dp = 48.dp,
@@ -505,11 +502,11 @@ private fun Density.calculateAutoCompletePosition(
     horizontalPadding: Dp,
     gutterWidth: Dp,
     charWidth: Float
-): Offset {
+): IntOffset {
     val cursorPosition = state.cursorPosition
 
-    return Offset(
-        x = (cursorPosition.column * charWidth) + gutterWidth.toPx() + horizontalPadding.toPx(),
-        y = (cursorPosition.line + 1) * lineHeight.toPx()
+    return IntOffset(
+        x = ((cursorPosition.column * charWidth) + gutterWidth.toPx() + horizontalPadding.toPx()).toInt(),
+        y = ((cursorPosition.line + 1) * lineHeight.toPx()).toInt()
     )
 }

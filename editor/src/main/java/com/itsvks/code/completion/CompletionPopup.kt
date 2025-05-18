@@ -13,32 +13,37 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
 
 @Composable
 fun CompletionPopup(
     items: List<String>,
-    position: Offset,
+    position: IntOffset,
     onItemSelected: (String) -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .offset(position.x.dp, position.y.dp)
-            .background(Color(0xFF252526), shape = RoundedCornerShape(4.dp))
-            .padding(4.dp)
+    Popup(
+        offset = position,
     ) {
-        Column {
-            items.forEach { item ->
-                Text(
-                    text = item,
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                        .clickable { onItemSelected(item) }
-                )
+        Box(
+            modifier = Modifier
+                .background(Color(0xFF252526), shape = RoundedCornerShape(4.dp))
+                .padding(4.dp)
+        ) {
+            Column {
+                items.forEach { item ->
+                    Text(
+                        text = item,
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .clickable { onItemSelected(item) }
+                    )
+                }
             }
         }
     }
