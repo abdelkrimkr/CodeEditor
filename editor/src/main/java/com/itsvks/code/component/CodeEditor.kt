@@ -69,6 +69,7 @@ import com.itsvks.code.input.codeEditorTextInput
 import com.itsvks.code.rendering.drawEditorContent
 import com.itsvks.code.syntax.SyntaxHighlighterFactory
 import com.itsvks.code.util.isPrintable
+import com.itsvks.code.util.rememberImeHeight
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -133,31 +134,34 @@ fun CodeEditor(
         label = "cursorAlpha"
     )
 
-    // Calculate character width for monospaced font
     val charWidth = textPaint.measureText("W")
     var scrollableBoxSize by remember { mutableStateOf(IntSize.Zero) }
-
     val focusInteractionSource = remember { MutableInteractionSource() }
-    val isFocused by focusInteractionSource.collectIsFocusedAsState()
 
     val syntaxHighlighter = remember(state.language) {
         SyntaxHighlighterFactory.createHighlighter(state.language)
     }
 
+    val imeHeight by rememberImeHeight()
+
     // Completion popup state
     var showCompletions by remember { mutableStateOf(false) }
 
-    // Blink cursor effect (for visual feedback)
-    LaunchedEffect(isCursorMoving) {
-        while (true) {
-            if (isCursorMoving || !blinkCursor) {
-                cursorVisible = true
-                continue
+    LaunchedEffect(isCursorMoving, blinkCursor) {
+        if (isCursorMoving || !blinkCursor) {
+            cursorVisible = true
+        } else {
+            while (true) {
+                cursorVisible = !cursorVisible
+                delay(cursorBlinkDuration)
             }
-
-            cursorVisible = !cursorVisible
-            delay(cursorBlinkDuration)
         }
+    }
+
+    LaunchedEffect(state.cursorPosition) {
+        isCursorMoving = true
+        delay(500)
+        isCursorMoving = false
     }
 
     Box(modifier = modifier) {
@@ -196,7 +200,7 @@ fun CodeEditor(
             val maxLineLength = state.buffer.lines.maxOfOrNull { it.length } ?: 0
             val contentWidth = (maxLineLength * charWidth).dp
             val lineHeightPx = with(density) { lineHeight.toPx() }
-            val contentHeight = (state.buffer.lineCount * lineHeightPx).dp
+            val contentHeight = (state.buffer.lineCount * lineHeightPx).dp - imeHeight
 
             // Gutter
             Box(
@@ -246,8 +250,7 @@ fun CodeEditor(
                             handleKeyEvent(
                                 event = it,
                                 state = state,
-                                clipboard = clipboard,
-                                onCursorMoved = { isCursorMoving = it }
+                                clipboard = clipboard
                             )
                         }
                     )

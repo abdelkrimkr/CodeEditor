@@ -168,6 +168,13 @@ class TextBuffer(private var nativePtr: Long) : Closeable {
     fun deleteBackward(position: TextPosition): TextPosition {
         checkRopeIsInitialized()
         val index = position.toIndex()
+
+        val char = NativeTextBuffer.ropeGetChar(nativePtr, index - 1)
+        if (char == '\r') {
+            NativeTextBuffer.ropeRemove(nativePtr, index - 2, index)
+            return indexToPosition(index - 2)
+        }
+
         return if (index > 0) {
             NativeTextBuffer.ropeRemove(nativePtr, index - 1, index)
             indexToPosition(index - 1)
