@@ -24,6 +24,11 @@ data class TextPositionRange(val start: TextPosition, val end: TextPosition) {
     val startInclusive: TextPosition
         get() = if (start <= end) start else end
 
+    operator fun contains(position: TextPosition): Boolean {
+        return start.line <= position.line && position.line <= end.line &&
+                start.column <= position.column && position.column <= end.column
+    }
+
     private fun compareTextPositions(): Int {
         return if (start.line != end.line) {
             start.line - end.line

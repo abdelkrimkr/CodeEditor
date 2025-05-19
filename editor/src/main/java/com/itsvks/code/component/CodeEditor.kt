@@ -149,13 +149,14 @@ fun CodeEditor(
 
     // Blink cursor effect (for visual feedback)
     LaunchedEffect(isCursorMoving) {
-        if (!isCursorMoving && blinkCursor) {
-            while (true) {
-                cursorVisible = !cursorVisible
-                delay(cursorBlinkDuration)
+        while (true) {
+            if (isCursorMoving || !blinkCursor) {
+                cursorVisible = true
+                continue
             }
-        } else {
-            cursorVisible = true // Keep cursor visible while moving
+
+            cursorVisible = !cursorVisible
+            delay(cursorBlinkDuration)
         }
     }
 

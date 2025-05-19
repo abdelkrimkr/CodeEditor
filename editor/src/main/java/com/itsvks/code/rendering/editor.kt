@@ -132,9 +132,10 @@ internal fun DrawScope.drawEditorContent(
 
             drawIntoCanvas { canvas ->
                 canvas.nativeCanvas.drawText(
-                    charToDraw.toString(), xOffset,
-                    lineIndex * lineHeight + lineHeight * 0.8f,
-                    textPaint
+                    /* text = */ charToDraw.toString(),
+                    /* x = */ xOffset,
+                    /* y = */ lineIndex * lineHeight + lineHeight * 0.8f,
+                    /* paint = */ textPaint
                 )
             }
             xOffset += charWidth
