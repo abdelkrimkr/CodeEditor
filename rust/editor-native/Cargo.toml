@@ -7,7 +7,7 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-jni = "0.21.1"
+jni = { version = "0.21.1", default-features = false }
 ropey = "1.6.1"
 android_logger = "0.15"
 log = "0.4.27"

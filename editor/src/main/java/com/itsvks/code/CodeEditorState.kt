@@ -1,23 +1,20 @@
 package com.itsvks.code
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import com.itsvks.code.core.Direction
 import com.itsvks.code.core.TextBuffer
 import com.itsvks.code.core.TextPosition
 import com.itsvks.code.core.TextPositionRange
+import com.itsvks.code.core.deleteLine
+import com.itsvks.code.core.getLineSafe
+import com.itsvks.code.core.insertLine
+import com.itsvks.code.core.swapLines
 import com.itsvks.code.language.Language
 import com.itsvks.code.language.LanguageRegistry
 import com.itsvks.code.language.PlainTextLanguage
 import com.itsvks.code.theme.EditorTheme
 import com.itsvks.code.theme.VsCodeDarkTheme
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 
 @Composable
 fun rememberCodeEditorState(
@@ -30,14 +27,13 @@ fun rememberCodeEditorState(
 
 class CodeEditorState(
     filePath: String,
-    language: Language = LanguageRegistry.getLanguageByFileName(filePath) ?: PlainTextLanguage,
-    theme: EditorTheme = VsCodeDarkTheme
+    language: Language,
+    theme: EditorTheme
 ) {
     private val editorScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     var buffer = TextBuffer.fromFile(filePath)
     var cursorPosition by mutableStateOf(TextPosition(0, 0))
-
     private var selectionAnchor: TextPosition? = null
     var selectionRange by mutableStateOf<TextPositionRange?>(null)
         private set
@@ -46,7 +42,11 @@ class CodeEditorState(
     var theme by mutableStateOf(theme)
 
     var isCompletionPopupVisible by mutableStateOf(false)
-    var completionItems by mutableStateOf<List<String>>(emptyList())
+    var completionItems by mutableStateOf(emptyList<String>())
+
+    private var preferredColumn: Int? = null
+
+    /** ------------------------------ Cursor & Selection ------------------------------ */
 
     fun moveCursorTo(position: TextPosition) {
         cursorPosition = buffer.clampPosition(position)
@@ -54,63 +54,19 @@ class CodeEditorState(
     }
 
     fun moveCursorAtEnd() {
-        cursorPosition = buffer.endPosition()
-        clearSelection()
+        moveCursorTo(buffer.endPosition())
     }
 
     fun moveCursor(direction: Direction, isShiftPressed: Boolean = false): Boolean {
         val oldPosition = cursorPosition
-
-        val newPosition = when (direction) {
-            Direction.LEFT -> {
-                if (cursorPosition.column > 0) {
-                    cursorPosition.copy(column = cursorPosition.column - 1)
-                } else if (cursorPosition.line > 0) {
-                    val prevLineLength = buffer.lines.getOrNull(cursorPosition.line - 1)?.length ?: 0
-                    TextPosition(cursorPosition.line - 1, prevLineLength)
-                } else {
-                    cursorPosition
-                }
-            }
-
-            Direction.RIGHT -> {
-                val currentLine = buffer.lines.getOrNull(cursorPosition.line) ?: ""
-                if (cursorPosition.column < currentLine.length) {
-                    cursorPosition.copy(column = cursorPosition.column + 1)
-                } else if (cursorPosition.line < buffer.lines.size - 1) {
-                    TextPosition(cursorPosition.line + 1, 0)
-                } else {
-                    cursorPosition
-                }
-            }
-
-            Direction.UP -> {
-                if (cursorPosition.line > 0) {
-                    val prevLine = buffer.lines.getOrNull(cursorPosition.line - 1) ?: ""
-                    val newColumn = minOf(cursorPosition.column, prevLine.length)
-                    TextPosition(cursorPosition.line - 1, newColumn)
-                } else {
-                    cursorPosition
-                }
-            }
-
-            Direction.DOWN -> {
-                if (cursorPosition.line < buffer.lines.size - 1) {
-                    val nextLine = buffer.lines.getOrNull(cursorPosition.line + 1) ?: ""
-                    val newColumn = minOf(cursorPosition.column, nextLine.length)
-                    TextPosition(cursorPosition.line + 1, newColumn)
-                } else {
-                    cursorPosition
-                }
-            }
-        }
+        val newPosition = calculateNewCursorPosition(direction)
 
         if (isShiftPressed) {
             if (selectionAnchor == null) selectionAnchor = oldPosition
-
             selectionRange = TextPositionRange(selectionAnchor!!, newPosition).normalize()
         } else {
             clearSelection()
+            preferredColumn = null
         }
 
         val positionChanged = newPosition != oldPosition
@@ -118,8 +74,49 @@ class CodeEditorState(
         return positionChanged
     }
 
-    fun selectRange(range: TextPositionRange) {
-        selectionRange = range
+    private fun calculateNewCursorPosition(direction: Direction): TextPosition {
+        return when (direction) {
+            Direction.LEFT -> {
+                preferredColumn = null
+                if (cursorPosition.column > 0) {
+                    cursorPosition.copy(column = cursorPosition.column - 1)
+                } else if (cursorPosition.line > 0) {
+                    val prevLine = buffer.getLineSafe(cursorPosition.line - 1)
+                    TextPosition(cursorPosition.line - 1, prevLine!!.length)
+                } else cursorPosition
+            }
+
+            Direction.RIGHT -> {
+                preferredColumn = null
+                val currentLine = buffer.getLineSafe(cursorPosition.line) ?: ""
+                if (cursorPosition.column < currentLine.length) {
+                    cursorPosition.copy(column = cursorPosition.column + 1)
+                } else {
+                    val nextLine = buffer.getLineSafe(cursorPosition.line + 1, null)
+                    if (nextLine != null) TextPosition(cursorPosition.line + 1, 0) else cursorPosition
+                }
+            }
+
+            Direction.UP -> {
+                val targetLine = cursorPosition.line - 1
+                if (targetLine >= 0) {
+                    val lineText = buffer.getLineSafe(targetLine)
+                    val col = preferredColumn ?: cursorPosition.column
+                    preferredColumn = col
+                    TextPosition(targetLine, minOf(col, lineText!!.length))
+                } else cursorPosition
+            }
+
+            Direction.DOWN -> {
+                val targetLine = cursorPosition.line + 1
+                val lineText = buffer.getLineSafe(targetLine, null)
+                if (lineText != null) {
+                    val col = preferredColumn ?: cursorPosition.column
+                    preferredColumn = col
+                    TextPosition(targetLine, minOf(col, lineText.length))
+                } else cursorPosition
+            }
+        }
     }
 
     fun clearSelection() {
@@ -127,37 +124,31 @@ class CodeEditorState(
         selectionAnchor = null
     }
 
+    fun selectRange(range: TextPositionRange) {
+        selectionRange = range.normalize()
+    }
+
+    fun isTextSelected(): Boolean = selectionRange != null
+
+    /** ------------------------------ Editing ------------------------------ */
+
     fun insertText(text: String) {
         if (selectionRange != null) {
             buffer.deleteRange(selectionRange!!)
+            cursorPosition = selectionRange!!.start
             clearSelection()
         }
         buffer.insertText(cursorPosition, text)
         cursorPosition = buffer.advancePosition(cursorPosition, text)
     }
 
-    fun deleteSelectionOrBackspace() {
+    fun deleteBackward() {
         if (selectionRange != null) {
             buffer.deleteRange(selectionRange!!)
             moveCursorTo(selectionRange!!.start)
         } else {
             cursorPosition = buffer.deleteBackward(cursorPosition)
         }
-    }
-
-    fun isTextSelected(): Boolean {
-        return selectionRange != null
-    }
-
-    suspend fun setText(text: String) {
-        val clearText = withContext(Dispatchers.IO) {
-            text.replace("\t", "    ").replace("\r\n", "\n")
-        }
-
-        buffer.clear()
-        buffer.close()
-        buffer = TextBuffer.fromText(clearText)
-        moveCursorTo(TextPosition(0, 0))
     }
 
     fun deleteForward() {
@@ -169,8 +160,33 @@ class CodeEditorState(
         }
     }
 
-    fun getSelectedText(): String {
-        return selectionRange?.let { buffer.slice(it) } ?: ""
+    fun deleteSelectedText() {
+        selectionRange?.let {
+            buffer.deleteRange(it)
+            moveCursorTo(it.start)
+            clearSelection()
+        }
+    }
+
+    fun deleteSelectionOrBackspace() {
+        if (isTextSelected()) {
+            deleteSelectedText()
+        } else {
+            cursorPosition = buffer.deleteBackward(cursorPosition)
+        }
+    }
+
+    fun getSelectedText(): String = selectionRange?.let { buffer.slice(it) } ?: ""
+
+    // Unstable
+    suspend fun setText(text: String) {
+        val normalizedText = withContext(Dispatchers.IO) {
+            text.replace("\t", "    ").replace("\r\n", "\n")
+        }
+        buffer.clear()
+        buffer.close()
+        buffer = TextBuffer.fromText(normalizedText)
+        moveCursorTo(TextPosition(0, 0))
     }
 
     fun updateCompletions(items: List<String>) {
@@ -182,5 +198,51 @@ class CodeEditorState(
         isCompletionPopupVisible = false
         completionItems = emptyList()
     }
-}
 
+    fun selectWordAtCursor() {
+        val line = buffer.getLineSafe(cursorPosition.line) ?: return
+
+        val (startCol, endCol) = findWordBounds(line, cursorPosition.column)
+        selectRange(TextPositionRange(
+            TextPosition(cursorPosition.line, startCol),
+            TextPosition(cursorPosition.line, endCol)
+        ))
+    }
+
+    fun duplicateLine() {
+        val line = buffer.getLineSafe(cursorPosition.line) ?: return
+        buffer.insertLine(cursorPosition.line + 1, line)
+    }
+
+    fun deleteCurrentLine() {
+        buffer.deleteLine(cursorPosition.line)
+        moveCursorTo(TextPosition(cursorPosition.line.coerceAtMost(buffer.lineCount - 1), 0))
+    }
+
+    fun moveLineUp() {
+        if (cursorPosition.line > 0) {
+            buffer.swapLines(cursorPosition.line, cursorPosition.line - 1)
+            moveCursorTo(cursorPosition.copy(line = cursorPosition.line - 1))
+        }
+    }
+
+    fun moveLineDown() {
+        if (cursorPosition.line < buffer.lineCount - 1) {
+            buffer.swapLines(cursorPosition.line, cursorPosition.line + 1)
+            moveCursorTo(cursorPosition.copy(line = cursorPosition.line + 1))
+        }
+    }
+
+    private fun findWordBounds(line: String, col: Int): Pair<Int, Int> {
+        if (line.isBlank()) return 0 to 0
+        val isWordChar: (Char) -> Boolean = { it.isLetterOrDigit() || it == '_' }
+
+        var start = col
+        while (start > 0 && isWordChar(line[start - 1])) start--
+
+        var end = col
+        while (end < line.length && isWordChar(line[end])) end++
+
+        return start to end
+    }
+}

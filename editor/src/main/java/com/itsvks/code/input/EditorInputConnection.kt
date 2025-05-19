@@ -16,6 +16,7 @@ import com.itsvks.code.core.TextPositionRange
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 class EditorInputConnection(
@@ -43,6 +44,20 @@ class EditorInputConnection(
 
         Log.d(TAG, "commitText: text=$text, newCursorPosition=$newCursorPosition")
 
+        // Handle newline (Enter) specially
+        //
+        // Some keyboards (like GBoard) don't send key events for
+        // keys like Backspace or Enter and instead only
+        // use deleteSurroundingText() or commitText().
+        // Other keyboards (like physical or AOSP keyboard) do
+        // send sendKeyEvent(), especially for keys like Backspace or Enter.
+        if (text == "\n") {
+            val event = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER)
+            scope.launch { sendKeyEventHandler(androidx.compose.ui.input.key.KeyEvent(event)) }
+            return true
+        }
+
+        // Delete selected text before inserting new one
         if (state.selectionRange != null) {
             state.buffer.deleteRange(state.selectionRange!!)
             state.clearSelection()
@@ -54,6 +69,19 @@ class EditorInputConnection(
 
     override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
         Log.d(TAG, "deleteSurroundingText: before=$beforeLength, after=$afterLength")
+
+        if (state.isTextSelected()) {
+            state.buffer.deleteRange(state.selectionRange!!)
+            state.moveCursorTo(state.selectionRange!!.start)
+            state.clearSelection()
+            return true
+        }
+
+        if (beforeLength == 1 && afterLength == 0) {
+            val event = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL)
+            scope.launch { sendKeyEventHandler(androidx.compose.ui.input.key.KeyEvent(event)) }
+            return true
+        }
 
         val cursor = state.cursorPosition
         val cursorIndex = positionToIndex(cursor)
@@ -67,7 +95,6 @@ class EditorInputConnection(
             indexToPosition(startIndex),
             indexToPosition(endIndex)
         )
-
         state.moveCursorTo(indexToPosition(startIndex))
         return true
     }
@@ -128,6 +155,7 @@ class EditorInputConnection(
     override fun requestCursorUpdates(cursorUpdateMode: Int): Boolean = false
 
     override fun sendKeyEvent(event: KeyEvent?): Boolean {
+        Log.d(TAG, "sendKeyEvent: event=$event")
         return event?.let { runBlocking { sendKeyEventHandler(androidx.compose.ui.input.key.KeyEvent(it)) } } ?: false
     }
 
@@ -165,16 +193,18 @@ class EditorInputConnection(
     override fun setSelection(start: Int, end: Int): Boolean {
         Log.d(TAG, "setSelection: start=$start, end=$end")
 
-        val startPos = indexToPosition(start)
-        val endPos = indexToPosition(end)
+        // GBoard Issue
 
-        if (startPos == endPos) {
-            state.clearSelection()
-            state.moveCursorTo(startPos)
-        } else {
-            state.selectRange(TextPositionRange(startPos, endPos))
-            state.moveCursorTo(endPos)
-        }
+        // val startPos = indexToPosition(start)
+        // val endPos = indexToPosition(end)
+
+        // if (startPos == endPos) {
+        //     state.clearSelection()
+        //     state.moveCursorTo(startPos)
+        // } else {
+        //     state.selectRange(startPos..endPos)
+        //     state.moveCursorTo(endPos)
+        // }
 
         return true
     }

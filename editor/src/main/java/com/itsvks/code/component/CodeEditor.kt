@@ -10,7 +10,6 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
@@ -33,8 +32,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.key.Key
@@ -54,6 +51,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.toClipEntry
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -65,6 +66,7 @@ import com.itsvks.code.CodeEditorState
 import com.itsvks.code.core.Direction
 import com.itsvks.code.core.TextPosition
 import com.itsvks.code.core.TextPositionRange
+import com.itsvks.code.core.rememberJetBrainsMonoFontFamily
 import com.itsvks.code.input.codeEditorTextInput
 import com.itsvks.code.rendering.drawEditorContent
 import com.itsvks.code.syntax.SyntaxHighlighterFactory
@@ -143,6 +145,7 @@ fun CodeEditor(
     }
 
     val imeHeight by rememberImeHeight()
+    val fontFamily = rememberJetBrainsMonoFontFamily()
 
     // Completion popup state
     var showCompletions by remember { mutableStateOf(false) }
@@ -209,6 +212,8 @@ fun CodeEditor(
                     .verticalScroll(verticalScrollState)
                     .background(state.theme.gutterBgColor)
             ) {
+                val textMeasurer = rememberTextMeasurer()
+
                 Canvas(
                     modifier = Modifier
                         .width(gutterWidth)
@@ -219,17 +224,28 @@ fun CodeEditor(
                     val firstVisibleLine = (verticalScrollState.value / lineHeightPx).toInt().coerceAtLeast(0)
                     val lastVisibleLine = ((verticalScrollState.value + size.height) / lineHeightPx).toInt().coerceAtMost(lines - 1)
 
-                    for (lineIndex in firstVisibleLine .. lastVisibleLine) {
+                    for (lineIndex in firstVisibleLine..lastVisibleLine) {
                         val lineNumber = (lineIndex + 1).toString()
 
-                        drawIntoCanvas { canvas ->
-                            canvas.nativeCanvas.drawText(
-                                lineNumber,
-                                size.width - horizontalPadding.toPx(),
-                                lineIndex * lineHeightPx + lineHeightPx * 0.8f,
-                                gutterPaint
+                        val textLayout = textMeasurer.measure(
+                            text = AnnotatedString(lineNumber),
+                            style = TextStyle(
+                                fontFamily = fontFamily,
+                                fontSize = fontSize,
+                                color = state.theme.gutterTextColor
                             )
-                        }
+                        )
+
+                        val textWidth = textLayout.size.width.toFloat()
+                        val textHeight = textLayout.size.height.toFloat()
+
+                        val x = size.width - horizontalPadding.toPx() - textWidth
+                        val y = lineIndex * lineHeightPx + lineHeightPx * 0.8f - textHeight
+
+                        drawText(
+                            textLayoutResult = textLayout,
+                            topLeft = Offset(x, y)
+                        )
                     }
                 }
             }
