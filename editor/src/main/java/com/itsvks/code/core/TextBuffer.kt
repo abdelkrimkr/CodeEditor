@@ -65,6 +65,10 @@ class TextBuffer(private var nativePtr: Long) : Closeable {
         return NativeTextBuffer.ropeGetChar(nativePtr, index)
     }
 
+    fun getCharAt(position: TextPosition): Char {
+        return getCharAt(position.toIndex())
+    }
+
     fun getLine(lineIndex: Int): String {
         check(lineIndex in 0 until lineCount) { "Line index out of bounds: $lineIndex" }
         checkRopeIsInitialized()
@@ -163,6 +167,11 @@ class TextBuffer(private var nativePtr: Long) : Closeable {
 
     fun subSequence(start: TextPosition, end: TextPosition): CharSequence {
         return slice(start, end)
+    }
+
+    fun charBefore(position: TextPosition): Char? {
+        val index = position.toIndex()
+        return if (index > 0) getCharAt(index - 1) else null
     }
 
     fun deleteBackward(position: TextPosition): TextPosition {

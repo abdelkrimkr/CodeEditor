@@ -1,7 +1,12 @@
 package com.itsvks.code
 
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.itsvks.code.core.Direction
+import com.itsvks.code.core.EditorSnapshot
 import com.itsvks.code.core.TextBuffer
 import com.itsvks.code.core.TextPosition
 import com.itsvks.code.core.TextPositionRange
@@ -14,7 +19,11 @@ import com.itsvks.code.language.LanguageRegistry
 import com.itsvks.code.language.PlainTextLanguage
 import com.itsvks.code.theme.EditorTheme
 import com.itsvks.code.theme.VsCodeDarkTheme
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withContext
+import java.util.Stack
 
 @Composable
 fun rememberCodeEditorState(
@@ -46,7 +55,33 @@ class CodeEditorState(
 
     private var preferredColumn: Int? = null
 
-    /** ------------------------------ Cursor & Selection ------------------------------ */
+    private val undoStack = Stack<EditorSnapshot>()
+    private val redoStack = Stack<EditorSnapshot>()
+
+    private fun saveSnapshot() {
+        undoStack.push(EditorSnapshot(TextBuffer.fromText(buffer.text), cursorPosition, selectionRange))
+        redoStack.clear()
+    }
+
+    fun undo() {
+        if (undoStack.isNotEmpty()) {
+            redoStack.push(EditorSnapshot(TextBuffer.fromText(buffer.text), cursorPosition, selectionRange))
+            val snapshot = undoStack.pop()
+            buffer = snapshot.buffer
+            cursorPosition = snapshot.cursorPosition
+            selectionRange = snapshot.selectionRange
+        }
+    }
+
+    fun redo() {
+        if (redoStack.isNotEmpty()) {
+            undoStack.push(EditorSnapshot(TextBuffer.fromText(buffer.text), cursorPosition, selectionRange))
+            val snapshot = redoStack.pop()
+            buffer = snapshot.buffer
+            cursorPosition = snapshot.cursorPosition
+            selectionRange = snapshot.selectionRange
+        }
+    }
 
     fun moveCursorTo(position: TextPosition) {
         cursorPosition = buffer.clampPosition(position)
@@ -130,9 +165,8 @@ class CodeEditorState(
 
     fun isTextSelected(): Boolean = selectionRange != null
 
-    /** ------------------------------ Editing ------------------------------ */
-
     fun insertText(text: String) {
+        saveSnapshot()
         if (selectionRange != null) {
             buffer.deleteRange(selectionRange!!)
             cursorPosition = selectionRange!!.start
@@ -143,6 +177,7 @@ class CodeEditorState(
     }
 
     fun deleteBackward() {
+        saveSnapshot()
         if (selectionRange != null) {
             buffer.deleteRange(selectionRange!!)
             moveCursorTo(selectionRange!!.start)
@@ -152,6 +187,7 @@ class CodeEditorState(
     }
 
     fun deleteForward() {
+        saveSnapshot()
         if (selectionRange != null) {
             buffer.deleteRange(selectionRange!!)
             moveCursorTo(selectionRange!!.start)
@@ -161,6 +197,7 @@ class CodeEditorState(
     }
 
     fun deleteSelectedText() {
+        saveSnapshot()
         selectionRange?.let {
             buffer.deleteRange(it)
             moveCursorTo(it.start)
@@ -169,6 +206,7 @@ class CodeEditorState(
     }
 
     fun deleteSelectionOrBackspace() {
+        saveSnapshot()
         if (isTextSelected()) {
             deleteSelectedText()
         } else {
@@ -178,8 +216,8 @@ class CodeEditorState(
 
     fun getSelectedText(): String = selectionRange?.let { buffer.slice(it) } ?: ""
 
-    // Unstable
     suspend fun setText(text: String) {
+        saveSnapshot()
         val normalizedText = withContext(Dispatchers.IO) {
             text.replace("\t", "    ").replace("\r\n", "\n")
         }
@@ -203,24 +241,29 @@ class CodeEditorState(
         val line = buffer.getLineSafe(cursorPosition.line) ?: return
 
         val (startCol, endCol) = findWordBounds(line, cursorPosition.column)
-        selectRange(TextPositionRange(
-            TextPosition(cursorPosition.line, startCol),
-            TextPosition(cursorPosition.line, endCol)
-        ))
+        selectRange(
+            TextPositionRange(
+                TextPosition(cursorPosition.line, startCol),
+                TextPosition(cursorPosition.line, endCol)
+            )
+        )
     }
 
     fun duplicateLine() {
+        saveSnapshot()
         val line = buffer.getLineSafe(cursorPosition.line) ?: return
         buffer.insertLine(cursorPosition.line + 1, line)
     }
 
     fun deleteCurrentLine() {
+        saveSnapshot()
         buffer.deleteLine(cursorPosition.line)
         moveCursorTo(TextPosition(cursorPosition.line.coerceAtMost(buffer.lineCount - 1), 0))
     }
 
     fun moveLineUp() {
         if (cursorPosition.line > 0) {
+            saveSnapshot()
             buffer.swapLines(cursorPosition.line, cursorPosition.line - 1)
             moveCursorTo(cursorPosition.copy(line = cursorPosition.line - 1))
         }
@@ -228,6 +271,7 @@ class CodeEditorState(
 
     fun moveLineDown() {
         if (cursorPosition.line < buffer.lineCount - 1) {
+            saveSnapshot()
             buffer.swapLines(cursorPosition.line, cursorPosition.line + 1)
             moveCursorTo(cursorPosition.copy(line = cursorPosition.line + 1))
         }

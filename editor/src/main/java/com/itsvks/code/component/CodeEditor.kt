@@ -422,6 +422,16 @@ private suspend fun handleCtrlKeyEvent(event: KeyEvent, state: CodeEditorState, 
             true
         }
 
+        Key.Z -> {
+            state.undo()
+            true
+        }
+
+        Key.Y -> {
+            state.redo()
+            true
+        }
+
         else -> false
     }
 }
