@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.toArgb
 import com.itsvks.code.core.TextBuffer
 import com.itsvks.code.core.TextPosition
 import com.itsvks.code.core.TextPositionRange
+import com.itsvks.code.core.getLineSafe
 import com.itsvks.code.syntax.SyntaxHighlighter
 import com.itsvks.code.theme.EditorTheme
 
@@ -23,25 +24,11 @@ internal fun DrawScope.drawSelection(
     horizontalPadding: Float,
     color: Color
 ) {
-    val startLine = from.line
-    val endLine = to.line
-
-    for (line in startLine .. endLine) {
-        val x1 = when (line) {
-            startLine -> from.column * charWidth + horizontalPadding
-            else -> horizontalPadding
-        }
-        val x2 = when (line) {
-            endLine -> to.column * charWidth + horizontalPadding
-            else -> lines[line].length * charWidth + horizontalPadding
-        }
+    for (line in from.line..to.line) {
+        val x1 = if (line == from.line) from.column * charWidth + horizontalPadding else horizontalPadding
+        val x2 = if (line == to.line) to.column * charWidth + horizontalPadding else lines[line].length * charWidth + horizontalPadding
         val y = line * lineHeight
-
-        drawRect(
-            color = color,
-            topLeft = Offset(x1, y),
-            size = Size(x2 - x1, lineHeight)
-        )
+        drawRect(color = color, topLeft = Offset(x1, y), size = Size(x2 - x1, lineHeight))
     }
 }
 
@@ -56,13 +43,7 @@ internal fun DrawScope.drawCursor(
 ) {
     val x = position.column * charWidth + horizontalPadding
     val y = position.line * lineHeight
-
-    drawLine(
-        color = color.copy(alpha = alpha),
-        start = Offset(x, y),
-        end = Offset(x, y + lineHeight),
-        strokeWidth = width
-    )
+    drawLine(color = color.copy(alpha = alpha), start = Offset(x, y), end = Offset(x, y + lineHeight), strokeWidth = width)
 }
 
 internal fun DrawScope.drawEditorContent(
@@ -81,8 +62,23 @@ internal fun DrawScope.drawEditorContent(
     firstVisibleLine: Int,
     lastVisibleLine: Int
 ) {
-    val lines = buffer.lines
-    val tokens = syntaxHighlighter.highlight(buffer.text)
+    val invisibleChars = mapOf(" " to '·', "\n" to '↴', "\t" to '→', "\r" to '↵')
+    val lines = mutableListOf<String>()
+    val lineOffsets = IntArray(lastVisibleLine - firstVisibleLine + 1)
+    var offset = buffer.lineToChar(firstVisibleLine)
+    for (i in firstVisibleLine..lastVisibleLine) {
+        val line = buffer.getLineSafe(i).orEmpty()
+        lines.add(line)
+        lineOffsets[i - firstVisibleLine] = offset
+        offset += line.length + 1
+    }
+
+    val tokens = syntaxHighlighter.highlight(
+        buffer.slice(
+            TextPosition(firstVisibleLine, 0),
+            TextPosition(lastVisibleLine, buffer.getLineLength(lastVisibleLine))
+        )
+    )
 
     selectionRange?.let {
         drawSelection(
@@ -96,60 +92,34 @@ internal fun DrawScope.drawEditorContent(
         )
     }
 
-    val invisibleChars = mapOf(" " to '·', "\n" to '↴', "\t" to '→', "\r" to '↵')
     var tokenIndex = 0
-    var globalCharIndex = 0
-
-    lines.forEachIndexed { lineIndex, line ->
-        if (lineIndex < firstVisibleLine || lineIndex > lastVisibleLine) {
-            globalCharIndex += line.length + 1 // account for newline
-            return@forEachIndexed
-        }
-
+    for (lineIndex in lines.indices) {
+        val actualLine = firstVisibleLine + lineIndex
+        val line = lines[lineIndex]
         var xOffset = horizontalPadding
+        val baseCharIndex = lineOffsets[lineIndex]
 
-        line.forEachIndexed { charIndex, char ->
-            val absoluteIndex = globalCharIndex + charIndex
-
+        var charIndex = 0
+        while (charIndex < line.length) {
+            val absoluteIndex = baseCharIndex + charIndex
             while (tokenIndex < tokens.lastIndex && absoluteIndex > tokens[tokenIndex].range.last) {
                 tokenIndex++
             }
 
             val token = tokens.getOrNull(tokenIndex)
-            val color = if (token != null && absoluteIndex in token.range) {
-                theme.getColorForToken(token.type)
-            } else {
-                theme.defaultTextColor
-            }
+            val color = if (token != null && absoluteIndex in token.range) theme.getColorForToken(token.type) else theme.defaultTextColor
 
-            textPaint.color = if (drawInvisibles && char.toString() in invisibleChars) {
-                theme.invisibleCharColor.toArgb()
-            } else {
-                color.toArgb()
-            }
-
+            val char = line[charIndex]
+            textPaint.color = if (drawInvisibles && char.toString() in invisibleChars) theme.invisibleCharColor.toArgb() else color.toArgb()
             val charToDraw = if (drawInvisibles) invisibleChars[char.toString()] ?: char else char
 
             drawIntoCanvas { canvas ->
-                canvas.nativeCanvas.drawText(
-                    /* text = */ charToDraw.toString(),
-                    /* x = */ xOffset,
-                    /* y = */ lineIndex * lineHeight + lineHeight * 0.8f,
-                    /* paint = */ textPaint
-                )
+                canvas.nativeCanvas.drawText(charToDraw.toString(), xOffset, actualLine * lineHeight + lineHeight * 0.8f, textPaint)
             }
             xOffset += charWidth
+            charIndex++
         }
-        globalCharIndex += line.length + 1
     }
 
-    drawCursor(
-        position = cursorPosition,
-        lineHeight = lineHeight,
-        charWidth = charWidth,
-        horizontalPadding = horizontalPadding,
-        color = theme.cursorColor,
-        width = cursorWidth,
-        alpha = cursorAlpha
-    )
+    drawCursor(cursorPosition, lineHeight, charWidth, horizontalPadding, theme.cursorColor, cursorWidth, cursorAlpha)
 }

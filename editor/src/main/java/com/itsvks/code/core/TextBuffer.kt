@@ -2,146 +2,81 @@ package com.itsvks.code.core
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import java.io.Closeable
+import java.io.File
 
 @Composable
 fun rememberTextBuffer(initialText: String): TextBuffer {
     return remember(initialText) { TextBuffer.fromText(initialText) }
 }
 
-class TextBuffer(private var nativePtr: Long) : Closeable {
+class TextBuffer private constructor(private var rope: Rope) {
     companion object {
         @JvmStatic
         fun fromFile(path: String): TextBuffer {
-            val nativePtr = NativeTextBuffer.createRopeFromFile(path)
-            return TextBuffer(nativePtr)
+            val rope = Rope.fromFile(File(path))
+            return TextBuffer(rope)
         }
 
         @JvmStatic
         fun fromText(text: String): TextBuffer {
-            val nativePtr = NativeTextBuffer.createRope(text)
-            return TextBuffer(nativePtr)
+            val rope = Rope.fromString(text)
+            return TextBuffer(rope)
         }
     }
 
-    val length: Int
-        get() {
-            checkRopeIsInitialized()
-            return NativeTextBuffer.ropeLen(nativePtr)
-        }
+    val length: Int get() = rope.length
+    val lineCount: Int get() = rope.lineCount
 
-    val byteLength: Int
-        get() {
-            checkRopeIsInitialized()
-            return NativeTextBuffer.ropeByteLen(nativePtr)
-        }
+    val maxLineLength: Int get() = rope.maxLineLength()
 
-    val lineCount: Int
-        get() {
-            checkRopeIsInitialized()
-            return NativeTextBuffer.ropeLineCount(nativePtr)
-        }
+    fun clone(): TextBuffer = TextBuffer(rope.clone())
 
-    var text: String
-        get() = NativeTextBuffer.ropeToString(nativePtr)
-        set(value) {
-            if (length > 0) {
-                NativeTextBuffer.ropeRemove(nativePtr, 0, length)
-            }
-            NativeTextBuffer.ropeInsert(nativePtr, 0, value)
-        }
+    fun getCharAt(index: Int): Char = rope.charAt(index)
 
-    val lines get() = text.split("\n")
+    fun getCharAt(position: TextPosition): Char = getCharAt(position.toIndex())
 
-    private fun checkRopeIsInitialized() {
-        check(nativePtr != 0L) {
-            "TextBuffer is not initialized."
-        }
-    }
+    fun getLine(lineIndex: Int): String = rope.line(lineIndex).toPlainString()
 
-    fun getCharAt(index: Int): Char {
-        check(index in 0 until length) { "Index out of bounds: $index" }
-        checkRopeIsInitialized()
-        return NativeTextBuffer.ropeGetChar(nativePtr, index)
-    }
+    fun getLineLength(lineIndex: Int): Int = rope.lineLength(lineIndex)
 
-    fun getCharAt(position: TextPosition): Char {
-        return getCharAt(position.toIndex())
-    }
-
-    fun getLine(lineIndex: Int): String {
-        check(lineIndex in 0 until lineCount) { "Line index out of bounds: $lineIndex" }
-        checkRopeIsInitialized()
-        return NativeTextBuffer.ropeGetLine(nativePtr, lineIndex)
-    }
-
-    fun getLineLength(lineIndex: Int): Int {
-        check(lineIndex in 0 until lineCount) { "Line index out of bounds: $lineIndex" }
-        checkRopeIsInitialized()
-        return NativeTextBuffer.ropeLineLen(nativePtr, lineIndex) - (if (isLastLine(lineIndex)) 0 else 1)
-    }
-
-    fun getLineLengthUpTo(lineIndex: Int, column: Int): Int {
-        check(lineIndex in 0 until lineCount) { "Line index out of bounds: $lineIndex" }
-        val start = TextPosition(lineIndex, 0)
-        val end = TextPosition(lineIndex, column)
-        return slice(start .. end).length
-    }
+//    fun getLineLengthUpTo(lineIndex: Int, column: Int): Int = rope.lineLengthUpTo(lineIndex, column)
 
     fun insert(position: TextPosition, text: String) {
-        checkRopeIsInitialized()
-        NativeTextBuffer.ropeInsert(nativePtr, position.toIndex(), text)
+        rope = rope.insert(position.toIndex(), text)
     }
 
-    fun insertText(position: TextPosition, text: String) {
-        insert(position, text)
-    }
+    fun insertText(position: TextPosition, text: String) = insert(position, text)
 
     fun delete(position: TextPosition) {
-        checkRopeIsInitialized()
         val index = position.toIndex()
         if (index in 1 .. length) {
-            NativeTextBuffer.ropeRemove(nativePtr, index - 1, index)
+            rope = rope.remove(index - 1, index)
         }
     }
 
-    fun deleteRange(range: TextPositionRange) {
-        deleteRange(range.start, range.end)
-    }
+    fun deleteRange(range: TextPositionRange) = deleteRange(range.start, range.end)
 
     fun deleteRange(from: TextPosition, to: TextPosition) {
-        checkRopeIsInitialized()
         val startIndex = from.toIndex()
         val endIndex = to.toIndex()
         if (startIndex < endIndex) {
-            NativeTextBuffer.ropeRemove(nativePtr, startIndex, endIndex)
+            rope = rope.remove(startIndex, endIndex)
         }
     }
 
     fun slice(start: TextPosition, end: TextPosition): String {
-        checkRopeIsInitialized()
         val startIndex = start.toIndex()
         val endIndex = end.toIndex()
-        return NativeTextBuffer.ropeSlice(nativePtr, startIndex, endIndex)
+        return rope.slice(startIndex, endIndex).toPlainString()
     }
 
-    fun slice(range: TextPositionRange): String {
-        return slice(range.start, range.end)
-    }
+    fun slice(range: TextPositionRange): String = slice(range.start, range.end)
 
-    fun lineToChar(line: Int): Int {
-        checkRopeIsInitialized()
-        return NativeTextBuffer.ropeLineToChar(nativePtr, line)
-    }
+    fun lineToChar(line: Int): Int = rope.lineToChar(line)
 
-    fun charToLine(charIdx: Int): Int {
-        checkRopeIsInitialized()
-        return NativeTextBuffer.ropeCharToLine(nativePtr, charIdx)
-    }
+    fun charToLine(charIdx: Int): Int = rope.charToLine(charIdx)
 
-    fun copy(range: TextPositionRange): String {
-        return slice(range)
-    }
+    fun copy(range: TextPositionRange): String = slice(range)
 
     fun cut(range: TextPositionRange): String {
         val text = slice(range)
@@ -149,25 +84,19 @@ class TextBuffer(private var nativePtr: Long) : Closeable {
         return text
     }
 
-    fun paste(position: TextPosition, text: String) {
-        insert(position, text)
-    }
+    fun paste(position: TextPosition, text: String) = insert(position, text)
 
     fun append(text: String) {
-        checkRopeIsInitialized()
-        NativeTextBuffer.ropeInsert(nativePtr, length, text)
+        rope = rope.insert(length, text)
     }
 
     fun clear() {
-        checkRopeIsInitialized()
-        NativeTextBuffer.ropeRemove(nativePtr, 0, length)
+        rope = rope.remove(0, length)
     }
 
     fun isEmpty(): Boolean = length == 0
 
-    fun subSequence(start: TextPosition, end: TextPosition): CharSequence {
-        return slice(start, end)
-    }
+    fun subSequence(start: TextPosition, end: TextPosition): CharSequence = slice(start, end)
 
     fun charBefore(position: TextPosition): Char? {
         val index = position.toIndex()
@@ -175,26 +104,23 @@ class TextBuffer(private var nativePtr: Long) : Closeable {
     }
 
     fun deleteBackward(position: TextPosition): TextPosition {
-        checkRopeIsInitialized()
         val index = position.toIndex()
+        if (index <= 0) return position
 
-        val char = NativeTextBuffer.ropeGetChar(nativePtr, index - 1)
-        if (char == '\r') {
-            NativeTextBuffer.ropeRemove(nativePtr, index - 2, index)
-            return indexToPosition(index - 2)
-        }
-
-        return if (index > 0) {
-            NativeTextBuffer.ropeRemove(nativePtr, index - 1, index)
+        val char = rope.charAt(index - 1)
+        return if (char == '\r' && index >= 2) {
+            rope = rope.remove(index - 2, index)
+            indexToPosition(index - 2)
+        } else {
+            rope = rope.remove(index - 1, index)
             indexToPosition(index - 1)
-        } else position
+        }
     }
 
     fun deleteForward(position: TextPosition): TextPosition {
-        checkRopeIsInitialized()
         val index = position.toIndex()
         return if (index < length) {
-            NativeTextBuffer.ropeRemove(nativePtr, index, index + 1)
+            rope = rope.remove(index, index + 1)
             position
         } else position
     }
@@ -220,25 +146,19 @@ class TextBuffer(private var nativePtr: Long) : Closeable {
     }
 
     fun indexToPosition(index: Int): TextPosition {
-        val line = NativeTextBuffer.ropeCharToLine(nativePtr, index)
-        val lineStart = NativeTextBuffer.ropeLineToChar(nativePtr, line)
+        val line = rope.charToLine(index)
+        val lineStart = rope.lineToChar(line)
         return TextPosition(line, index - lineStart)
     }
 
     fun isLastLine(lineIdx: Int) = lineIdx == lineCount - 1
 
-    fun endPosition(): TextPosition {
-        return TextPosition(lineCount - 1, getLineLength(lineCount - 1))
-    }
+    fun endPosition(): TextPosition = TextPosition(lineCount - 1, getLineLength(lineCount - 1))
+
+    fun getFullText() = rope.toPlainString()
 
     private fun TextPosition.toIndex(): Int {
-        checkRopeIsInitialized()
-        val lineStart = NativeTextBuffer.ropeLineToChar(nativePtr, line)
+        val lineStart = rope.lineToChar(line)
         return lineStart + column
-    }
-
-    override fun close() {
-        NativeTextBuffer.deleteRope(nativePtr)
-        nativePtr = 0
     }
 }

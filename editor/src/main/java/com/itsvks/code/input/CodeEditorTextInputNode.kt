@@ -51,6 +51,7 @@ class CodeEditorTextInputNode(
         return object : PlatformTextInputMethodRequest {
             override fun createInputConnection(outAttributes: EditorInfo): InputConnection {
                 val connection = EditorInputConnection(
+                    view = view,
                     state = state,
                     sendKeyEventHandler = sendKeyEventHandler
                 )

@@ -49,7 +49,7 @@ dependencies {
 
     implementation(libs.utilcodex)
 
-    testImplementation(libs.junit)
+    testImplementation(kotlin("test"))
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -58,22 +58,4 @@ dependencies {
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-}
-
-val buildNativeBinary by tasks.registering(Exec::class) {
-    val jniLibsDir = projectDir.resolve("src/main/jniLibs")
-    commandLine(
-        "cargo", "ndk",
-        "-t", "arm64-v8a",
-        "-t", "armeabi-v7a",
-        "-t", "x86",
-        "-t", "x86_64",
-        "-o", jniLibsDir.toString(),
-        "build", "--release"
-    )
-    workingDir = rootProject.projectDir.resolve("rust/editor-native")
-}
-
-tasks.named("preBuild") {
-    dependsOn(buildNativeBinary)
 }

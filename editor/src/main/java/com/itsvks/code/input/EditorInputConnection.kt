@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.util.Log
 import android.view.KeyEvent
+import android.view.View
+import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.CompletionInfo
 import android.view.inputmethod.CorrectionInfo
 import android.view.inputmethod.ExtractedText
@@ -20,20 +22,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 class EditorInputConnection(
+    private val view: View,
     private val state: CodeEditorState,
     private val sendKeyEventHandler: suspend (androidx.compose.ui.input.key.KeyEvent) -> Boolean
-) : InputConnection {
+) : BaseInputConnection(view, true) {
 
     private val TAG = "EditorInputConnection"
     private var composingRegion: TextPositionRange? = null
-
     private val scope = CoroutineScope(Dispatchers.Unconfined + SupervisorJob())
 
     override fun beginBatchEdit(): Boolean = true
     override fun endBatchEdit(): Boolean = true
-
     override fun clearMetaKeyStates(states: Int): Boolean = true
-    override fun closeConnection() {}
+    override fun closeConnection() {
+        super.closeConnection()
+    }
 
     override fun commitCompletion(text: CompletionInfo?): Boolean = false
     override fun commitContent(inputContentInfo: InputContentInfo, flags: Int, opts: Bundle?): Boolean = false
@@ -41,29 +44,25 @@ class EditorInputConnection(
 
     override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
         if (text == null) return false
-
         Log.d(TAG, "commitText: text=$text, newCursorPosition=$newCursorPosition")
 
-        // Handle newline (Enter) specially
-        //
-        // Some keyboards (like GBoard) don't send key events for
-        // keys like Backspace or Enter and instead only
-        // use deleteSurroundingText() or commitText().
-        // Other keyboards (like physical or AOSP keyboard) do
-        // send sendKeyEvent(), especially for keys like Backspace or Enter.
         if (text == "\n") {
             val event = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER)
             scope.launch { sendKeyEventHandler(androidx.compose.ui.input.key.KeyEvent(event)) }
             return true
         }
 
-        // Delete selected text before inserting new one
-        if (state.selectionRange != null) {
-            state.buffer.deleteRange(state.selectionRange!!)
+        val selection = state.selectionRange
+        if (selection != null) {
+            state.buffer.deleteRange(selection)
             state.clearSelection()
         }
 
-        state.insertText(text.toString())
+        val cursorPos = state.cursorPosition
+        state.buffer.insertText(cursorPos, text.toString())
+        val newPos = state.buffer.advancePosition(cursorPos, text.toString())
+        state.moveCursorTo(newPos)
+
         return true
     }
 
@@ -71,8 +70,9 @@ class EditorInputConnection(
         Log.d(TAG, "deleteSurroundingText: before=$beforeLength, after=$afterLength")
 
         if (state.isTextSelected()) {
-            state.buffer.deleteRange(state.selectionRange!!)
-            state.moveCursorTo(state.selectionRange!!.start)
+            val range = state.selectionRange!!
+            state.buffer.deleteRange(range)
+            state.moveCursorTo(range.start)
             state.clearSelection()
             return true
         }
@@ -83,19 +83,17 @@ class EditorInputConnection(
             return true
         }
 
-        val cursor = state.cursorPosition
-        val cursorIndex = positionToIndex(cursor)
-
+        val cursorIndex = positionToIndex(state.cursorPosition)
         val startIndex = (cursorIndex - beforeLength).coerceAtLeast(0)
         val endIndex = (cursorIndex + afterLength).coerceAtMost(state.buffer.length)
-
         if (startIndex >= endIndex) return false
 
-        state.buffer.deleteRange(
-            indexToPosition(startIndex),
-            indexToPosition(endIndex)
-        )
-        state.moveCursorTo(indexToPosition(startIndex))
+        val start = indexToPosition(startIndex)
+        val end = indexToPosition(endIndex)
+
+        state.buffer.deleteRange(start .. end)
+        state.moveCursorTo(start)
+
         return true
     }
 
@@ -111,7 +109,7 @@ class EditorInputConnection(
     override fun getCursorCapsMode(reqModes: Int): Int = 0
 
     override fun getExtractedText(request: ExtractedTextRequest?, flags: Int): ExtractedText {
-        val text = state.buffer.text
+        val text = state.buffer.getFullText()
         val cursorIndex = positionToIndex(state.cursorPosition)
 
         return ExtractedText().apply {
@@ -132,20 +130,7 @@ class EditorInputConnection(
     override fun getHandler(): Handler? = null
 
     override fun getSelectedText(flags: Int): CharSequence {
-        val selection = state.selectionRange ?: return ""
-        return state.buffer.slice(selection)
-    }
-
-    override fun getTextAfterCursor(n: Int, flags: Int): CharSequence? {
-        val cursorIndex = positionToIndex(state.cursorPosition)
-        val end = (cursorIndex + n).coerceAtMost(state.buffer.length)
-        return state.buffer.slice(indexToPosition(cursorIndex), indexToPosition(end))
-    }
-
-    override fun getTextBeforeCursor(n: Int, flags: Int): CharSequence {
-        val cursorIndex = positionToIndex(state.cursorPosition)
-        val start = (cursorIndex - n).coerceAtLeast(0)
-        return state.buffer.slice(indexToPosition(start), indexToPosition(cursorIndex))
+        return state.selectionRange?.let { state.buffer.slice(it) } ?: ""
     }
 
     override fun performContextMenuAction(id: Int): Boolean = false
@@ -166,7 +151,6 @@ class EditorInputConnection(
 
     override fun setComposingText(text: CharSequence?, newCursorPosition: Int): Boolean {
         if (text == null) return false
-
         Log.d(TAG, "setComposingText: text=$text")
 
         if (composingRegion != null) {
@@ -175,16 +159,11 @@ class EditorInputConnection(
             state.moveCursorTo(newPos)
             composingRegion = TextPositionRange(composingRegion!!.start, newPos)
         } else {
-            if (state.selectionRange != null) {
-                state.buffer.deleteRange(state.selectionRange!!)
-                state.clearSelection()
-            }
-
-            val currentPos = state.cursorPosition
-            state.buffer.insertText(currentPos, text.toString())
-            val newPos = state.buffer.advancePosition(currentPos, text.toString())
+            val cursor = state.cursorPosition
+            state.buffer.insertText(cursor, text.toString())
+            val newPos = state.buffer.advancePosition(cursor, text.toString())
             state.moveCursorTo(newPos)
-            composingRegion = TextPositionRange(currentPos, newPos)
+            composingRegion = TextPositionRange(cursor, newPos)
         }
 
         return true
@@ -192,26 +171,22 @@ class EditorInputConnection(
 
     override fun setSelection(start: Int, end: Int): Boolean {
         Log.d(TAG, "setSelection: start=$start, end=$end")
+        val startPos = indexToPosition(start)
+        val endPos = indexToPosition(end)
 
-        // GBoard Issue
-
-        // val startPos = indexToPosition(start)
-        // val endPos = indexToPosition(end)
-
-        // if (startPos == endPos) {
-        //     state.clearSelection()
-        //     state.moveCursorTo(startPos)
-        // } else {
-        //     state.selectRange(startPos..endPos)
-        //     state.moveCursorTo(endPos)
-        // }
+        if (start == end) {
+            state.clearSelection()
+            state.moveCursorTo(startPos)
+        } else {
+            state.selectRange(startPos .. endPos)
+            state.moveCursorTo(endPos)
+        }
 
         return true
     }
 
     private fun positionToIndex(position: TextPosition): Int {
-        val lineStart = state.buffer.lineToChar(position.line)
-        return lineStart + position.column
+        return state.buffer.lineToChar(position.line) + position.column
     }
 
     private fun indexToPosition(index: Int): TextPosition {

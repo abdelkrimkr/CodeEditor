@@ -23,7 +23,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withContext
-import java.util.Stack
 
 @Composable
 fun rememberCodeEditorState(
@@ -55,18 +54,18 @@ class CodeEditorState(
 
     private var preferredColumn: Int? = null
 
-    private val undoStack = Stack<EditorSnapshot>()
-    private val redoStack = Stack<EditorSnapshot>()
+    val undoStack = ArrayDeque<EditorSnapshot>()
+    val redoStack = ArrayDeque<EditorSnapshot>()
 
     private fun saveSnapshot() {
-        undoStack.push(EditorSnapshot(TextBuffer.fromText(buffer.text), cursorPosition, selectionRange))
+        undoStack += EditorSnapshot(buffer.clone(), cursorPosition, selectionRange)
         redoStack.clear()
     }
 
     fun undo() {
         if (undoStack.isNotEmpty()) {
-            redoStack.push(EditorSnapshot(TextBuffer.fromText(buffer.text), cursorPosition, selectionRange))
-            val snapshot = undoStack.pop()
+            redoStack += EditorSnapshot(buffer.clone(), cursorPosition, selectionRange)
+            val snapshot = undoStack.removeLast()
             buffer = snapshot.buffer
             cursorPosition = snapshot.cursorPosition
             selectionRange = snapshot.selectionRange
@@ -75,8 +74,8 @@ class CodeEditorState(
 
     fun redo() {
         if (redoStack.isNotEmpty()) {
-            undoStack.push(EditorSnapshot(TextBuffer.fromText(buffer.text), cursorPosition, selectionRange))
-            val snapshot = redoStack.pop()
+            undoStack += EditorSnapshot(buffer.clone(), cursorPosition, selectionRange)
+            val snapshot = redoStack.removeLast()
             buffer = snapshot.buffer
             cursorPosition = snapshot.cursorPosition
             selectionRange = snapshot.selectionRange
@@ -222,7 +221,6 @@ class CodeEditorState(
             text.replace("\t", "    ").replace("\r\n", "\n")
         }
         buffer.clear()
-        buffer.close()
         buffer = TextBuffer.fromText(normalizedText)
         moveCursorTo(TextPosition(0, 0))
     }
