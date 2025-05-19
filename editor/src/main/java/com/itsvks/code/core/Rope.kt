@@ -19,11 +19,12 @@ import java.io.IOException
  * original unchanged.
  *
  * @property length The total number of characters in the Rope.
- * @property lineCount The total number of lines in the Rope (number of newline characters + 1 if not empty, or 0 if empty).
+ * @property lineCount The total number of lines in the Rope (number of newline characters).
+ * The number of actual text lines is typically lineCount + 1.
  */
-sealed class Rope {
+sealed class Rope : Iterable<Char> {
     abstract val length: Int
-    abstract val lineCount: Int // Represents the number of newline characters. The number of actual lines is lineCount + 1 (if length > 0).
+    abstract val lineCount: Int // Represents the number of newline characters.
 
     /**
      * Creates a deep copy of this Rope.
@@ -35,12 +36,15 @@ sealed class Rope {
     /**
      * Represents a leaf node in the Rope tree, containing a segment of text.
      *
-     * @param buffer The character array holding the text for this leaf.
-     * @param start The starting index of this leaf's segment within the buffer.
+     * The primary constructor is internal to encourage use of factory methods that ensure
+     * proper copying and handling of character arrays for immutability.
+     *
+     * @param buffer The character array holding the text for this leaf. This array should be exclusive to this Leaf instance.
+     * @param start The starting index of this leaf's segment within the buffer (typically 0 for buffers owned by this leaf).
      * @param length The number of characters in this leaf's segment.
      * @param lineCount The number of newline characters ('\n') within this leaf's segment.
      */
-    data class Leaf(
+    data class Leaf internal constructor(
         val buffer: CharArray,
         val start: Int,
         override val length: Int,
@@ -107,11 +111,11 @@ sealed class Rope {
         override val lineCount = left.lineCount + right.lineCount
 
         /**
-         * Returns the string representation of this node by concatenating its children.
-         * For debugging or full conversion. Can be expensive for large ropes.
+         * Returns a structural string representation of this node for debugging.
+         * Use [toPlainString] for the full concatenated string content.
          */
-        override fun toString(): String {
-            return toPlainString()
+        override fun toString(): String { // Changed from toPlainString()
+            return "Node(len=$length, lines=$lineCount, L_len=${left.length}, R_len=${right.length})"
         }
 
         override fun clone(): Rope {
@@ -121,6 +125,7 @@ sealed class Rope {
 
     companion object {
         private const val MAX_LEAF_SIZE = 512
+        private const val MIN_LEAF_SIZE = MAX_LEAF_SIZE / 4
 
         /**
          * Creates a Rope from a String.
@@ -174,7 +179,7 @@ sealed class Rope {
         /**
          * Creates a Rope from the content of a File.
          *
-         * The file is read using UTF-8 encoding.
+         * The file is read using UTF-8 encoding. This method is optimized for large files by reading in chunks.
          *
          * @param file The [File] to read content from.
          * @return A [Rope] instance representing the content of the file.
@@ -209,9 +214,7 @@ sealed class Rope {
                 throw e
             }
 
-            // If the file was empty or an error occurred before any leaves were added.
             if (leaves.isEmpty()) return Leaf("")
-
             return buildTreeFromLeaves(leaves)
         }
 
@@ -220,47 +223,57 @@ sealed class Rope {
             if (ropes.size == 1) return ropes[0]
 
             val mid = ropes.size / 2
-
             val leftSubtree = buildTreeFromLeaves(ropes.subList(0, mid))
             val rightSubtree = buildTreeFromLeaves(ropes.subList(mid, ropes.size))
-
             return concatenate(leftSubtree, rightSubtree)
         }
 
-        /**
-         * Internal concatenation function that attempts to maintain some balance
-         * by merging small adjacent leaves
-         */
         internal fun concatenate(r1: Rope, r2: Rope): Rope {
             if (r1.length == 0) return r2
             if (r2.length == 0) return r1
 
-            // Case 1: Both are leaves and their combined length is within MAX_LEAF_SIZE
-            if (r1 is Leaf && r2 is Leaf && (r1.length + r2.length <= MAX_LEAF_SIZE)) {
-                val newBuffer = CharArray(r1.length + r2.length)
-                System.arraycopy(r1.buffer, r1.start, newBuffer, 0, r1.length)
-                System.arraycopy(r2.buffer, r2.start, newBuffer, r1.length, r2.length)
-                val newLines = r1.lineCount + r2.lineCount // Sum of line counts is correct here
-                return Leaf(newBuffer, 0, newBuffer.size, newLines)
+            // Case 1: Both are leaves. Try to merge if they fit MAX_LEAF_SIZE,
+            // or if one is very small (below MIN_LEAF_SIZE) and they can be combined.
+            if (r1 is Leaf && r2 is Leaf) {
+                if (r1.length + r2.length <= MAX_LEAF_SIZE ||
+                    ((r1.length < MIN_LEAF_SIZE || r2.length < MIN_LEAF_SIZE)
+                            && r1.length + r2.length <= MAX_LEAF_SIZE + MIN_LEAF_SIZE / 2) // Allow slight oversize if merging tiny leaves
+                ) {
+                    if (r1.length + r2.length <= MAX_LEAF_SIZE * 1.25) { // Put a hard cap on how much oversize we allow
+                        val newBuffer = CharArray(r1.length + r2.length)
+                        System.arraycopy(r1.buffer, r1.start, newBuffer, 0, r1.length)
+                        System.arraycopy(r2.buffer, r2.start, newBuffer, r1.length, r2.length)
+                        val newLines = r1.lineCount + r2.lineCount
+                        return Leaf(newBuffer, 0, newBuffer.size, newLines)
+                    }
+                }
             }
 
             // Case 2: r1 is Node(L, R1_leaf) and r2 is R2_leaf. Try to merge R1_leaf and R2_leaf.
-            // This helps in right-associative appends like (A+B)+C -> A+(B+C_merged) if B and C are small leaves.
             if (r1 is Node && r1.right is Leaf && r2 is Leaf) {
-                if (r1.right.length + r2.length <= MAX_LEAF_SIZE) {
-                    // The concatenate function will return a single merged Leaf here
-                    val mergedRightLeaf = concatenate(r1.right, r2) as Leaf
-                    return Node(r1.left, mergedRightLeaf)
+                val r1Right = r1.right as Leaf
+                // Try to merge if combined is within MAX_LEAF_SIZE or if one is tiny
+                if (r1Right.length + r2.length <= MAX_LEAF_SIZE ||
+                    ((r1Right.length < MIN_LEAF_SIZE || r2.length < MIN_LEAF_SIZE)
+                            && r1Right.length + r2.length <= MAX_LEAF_SIZE + MIN_LEAF_SIZE / 2)
+                ) {
+                    if (r1Right.length + r2.length <= MAX_LEAF_SIZE * 1.25) {
+                        val mergedRight = concatenate(r1Right, r2)
+                        return Node(r1.left, mergedRight)
+                    }
                 }
             }
 
             // Case 3: r1 is L1_leaf and r2 is Node(L2_leaf, R). Try to merge L1_leaf and L2_leaf.
-            // This helps in left-associative prepends like A+(B+C) -> (A_merged+B)+C if A and B are small leaves.
             if (r1 is Leaf && r2 is Node && r2.left is Leaf) {
-                if (r1.length + r2.left.length <= MAX_LEAF_SIZE) {
-                    // The concatenate function will return a single merged Leaf here
-                    val mergedLeftLeaf = concatenate(r1, r2.left) as Leaf
-                    return Node(mergedLeftLeaf, r2.right)
+                val r2Left = r2.left as Leaf
+                if (r1.length + r2Left.length <= MAX_LEAF_SIZE ||
+                    ((r1.length < MIN_LEAF_SIZE || r2Left.length < MIN_LEAF_SIZE) && r1.length + r2Left.length <= MAX_LEAF_SIZE + MIN_LEAF_SIZE / 2)
+                ) {
+                    if (r1.length + r2Left.length <= MAX_LEAF_SIZE * 1.25) {
+                        val mergedLeft = concatenate(r1, r2Left)
+                        return Node(mergedLeft, r2.right)
+                    }
                 }
             }
 
@@ -297,6 +310,8 @@ sealed class Rope {
 
     /**
      * Creates a new Rope representing a slice (substring) of this Rope.
+     * Sliced portions might result in leaves smaller than MIN_LEAF_SIZE;
+     * further operations or explicit rebalancing might be needed to normalize them.
      *
      * @param start The starting index of the slice (inclusive).
      * @param end The ending index of the slice (exclusive).
@@ -324,9 +339,9 @@ sealed class Rope {
 
             is Node -> {
                 val leftLen = left.length
-                if (end <= leftLen) { // Slice is entirely within the left child
+                if (end <= leftLen) {
                     left.slice(start, end)
-                } else if (start >= leftLen) { // Slice is entirely within the right child
+                } else if (start >= leftLen) {
                     right.slice(start - leftLen, end - leftLen)
                 } else {
                     concatenate(
@@ -349,6 +364,7 @@ sealed class Rope {
 
     /**
      * Splits the Rope into two Ropes at the specified index.
+     * Resulting parts might be smaller than MIN_LEAF_SIZE.
      *
      * @param index The index at which to split. The character at this index will be the first
      * character of the second (right) Rope.
@@ -363,9 +379,9 @@ sealed class Rope {
 
         return when (this) {
             is Leaf -> {
-                val left = this.slice(0, index)
-                val right = this.slice(index, length)
-                left to right
+                val leftRope = this.slice(0, index)
+                val rightRope = this.slice(index, length)
+                leftRope to rightRope
             }
 
             is Node -> {
@@ -397,7 +413,7 @@ sealed class Rope {
 
         val (leftPart, temp) = split(start)
         val (_, rightPart) = temp.split(end - start)
-        return concatenate(leftPart, rightPart)
+        return concatenate(leftPart, rightPart) // Use companion object's concatenate
     }
 
     /**
@@ -425,6 +441,8 @@ sealed class Rope {
         return concatenate(concatenate(leftPart, textRope), rightPart)
     }
 
+    fun isEmpty(): Boolean = length == 0
+
     /**
      * Retrieves a specific line from the Rope.
      *
@@ -438,41 +456,44 @@ sealed class Rope {
      * @throws IllegalArgumentException if `lineIdx` is out of bounds.
      */
     fun line(lineIdx: Int): Rope {
-        val actualLineCount = if (length == 0) 0 else this.lineCount + (if (this.charAt(this.length - 1) == '\n') 0 else 1)
-        require(lineIdx >= 0 && (if (actualLineCount == 0) lineIdx == 0 else lineIdx < actualLineCount)) {
-            "Line index $lineIdx out of bounds (0..${actualLineCount - 1})"
+        val actualTextLines = if (length == 0 && lineCount == 0) 1 else lineCount + 1
+        require(lineIdx in 0 ..< actualTextLines) {
+            "Line index $lineIdx out of bounds for $actualTextLines text lines (0..${actualTextLines - 1})"
         }
         if (length == 0 && lineIdx == 0) return Leaf("")
 
-        var currentLineStartCharIdx = 0
-        var currentLineNum = 0
+        val currentLineStartCharIdx: Int
+        var numNewlinesEncountered = 0
 
-        for (i in 0 until length) {
-            if (currentLineNum == lineIdx) {
-                var lineEndCharIdx = i
-                while (lineEndCharIdx < length && charAt(lineEndCharIdx) != '\n') {
-                    lineEndCharIdx++
+        if (lineIdx == 0) { // first line
+            currentLineStartCharIdx = 0
+        } else {
+            // find start of target line
+            var charSearchIdx = 0
+            while (charSearchIdx < length && numNewlinesEncountered < lineIdx) {
+                if (charAt(charSearchIdx) == '\n') {
+                    numNewlinesEncountered++
                 }
-
-                return if (lineEndCharIdx < length && charAt(lineEndCharIdx) == '\n') {
-                    slice(i, lineEndCharIdx + 1)
-                } else { // Last line without a newline
-                    slice(i, lineEndCharIdx)
-                }
+                charSearchIdx++
             }
 
-            if (charAt(i) == '\n') {
-                currentLineNum++
-                currentLineStartCharIdx = i + 1
+            if (numNewlinesEncountered < lineIdx) {
+                error("Line $lineIdx not found, despite passing bounds check (A).")
             }
-        }
-        // Should be caught by require, or if lineIdx is for the last line after all newlines
-        if (currentLineNum == lineIdx && currentLineStartCharIdx < length) {
-            return slice(currentLineStartCharIdx, length)
+
+            currentLineStartCharIdx = charSearchIdx
         }
 
-        // If lineIdx is 0 for an empty rope, it's handled. Otherwise, this indicates an issue or out-of-bounds.
-        error("Line $lineIdx not found, logic error or invalid index despite checks. Total lines: $actualLineCount, Rope length: $length")
+        var lineEndCharIdx = currentLineStartCharIdx
+        while (lineEndCharIdx < length && charAt(lineEndCharIdx) != '\n') {
+            lineEndCharIdx++
+        }
+
+        return if (lineEndCharIdx < length && charAt(lineEndCharIdx) == '\n') {
+            slice(currentLineStartCharIdx, lineEndCharIdx + 1) // include newline
+        } else { // last line or line without a newline (should just be last line)
+            slice(currentLineStartCharIdx, lineEndCharIdx)
+        }
     }
 
 
@@ -483,9 +504,13 @@ sealed class Rope {
      * @return A Rope containing the line, or an empty Rope.
      */
     fun lineOrEmpty(lineIdx: Int): Rope {
-        val actualLineCount = if (length == 0) 0 else this.lineCount + (if (this.charAt(this.length - 1) == '\n') 0 else 1)
-        return if (lineIdx >= 0 && (if (actualLineCount == 0) lineIdx == 0 else lineIdx < actualLineCount)) {
-            line(lineIdx)
+        val actualTextLines = if (length == 0 && lineCount == 0) 1 else lineCount + 1
+        return if (lineIdx in 0 ..< actualTextLines) {
+            try {
+                line(lineIdx)
+            } catch (e: IllegalArgumentException) {
+                Leaf("")
+            }
         } else {
             Leaf("")
         }
@@ -503,27 +528,26 @@ sealed class Rope {
      * @throws IllegalArgumentException if `lineIdx` is out of bounds.
      */
     fun lineToChar(lineIdx: Int): Int {
-        val actualLineCount = if (length == 0) 0 else this.lineCount + (if (this.charAt(this.length - 1) == '\n') 0 else 1)
-        require(lineIdx >= 0 && (if (actualLineCount == 0) lineIdx == 0 else lineIdx < actualLineCount)) {
-            "lineToChar: Line index $lineIdx out of bounds (0..${actualLineCount - 1})"
+        val actualTextLines = if (length == 0 && lineCount == 0) 1 else lineCount + 1
+        require(lineIdx in 0 ..< actualTextLines) {
+            "lineToChar: Line index $lineIdx out of bounds for $actualTextLines text lines (0..${actualTextLines - 1})"
         }
-        if (length == 0 && lineIdx == 0) return 0
 
-        if (lineIdx == 0) return 0 // First line always starts at index 0
+        if (lineIdx == 0) return 0
 
-        var currentLine = 0
+        var numNewlinesToFind = lineIdx
         for (i in 0 until length) {
             if (charAt(i) == '\n') {
-                currentLine++
-                if (currentLine == lineIdx) {
-                    return i + 1 // Start of next line
+                numNewlinesToFind--
+                if (numNewlinesToFind == 0) {
+                    return i + 1 // Character after the (lineIdx-1)-th newline
                 }
             }
         }
-        // This point should ideally not be reached if lineIdx is valid and not 0.
-        // If lineIdx is for a line that doesn't exist (e.g., too high), the require should catch it.
-        // If it's the last line and has no newline, it's handled by the loop not finding enough newlines.
-        error("lineToChar: Logic error or invalid line index $lineIdx that bypassed checks.")
+        // This should not be reached if lineIdx is valid and > 0,
+        // as it implies not enough newlines were found for the requested line index.
+        // This can happen if lineIdx == lineCount + 1 (i.e. actualTextLines) which is out of bounds for 0-indexed lineIdx
+        error("lineToChar: Logic error or invalid line index $lineIdx that bypassed checks for line starting char.")
     }
 
     /**
@@ -531,19 +555,18 @@ sealed class Rope {
      *
      * This method is useful for converting character positions to line numbers.
      *
-     * @param charIdx The 0-based character index.
+     * @param charIdx The 0-based character index. `length` is a valid index representing cursor after last char.
      * @return The 0-based line number containing the character.
-     * @throws IllegalArgumentException if `charIdx` is out of bounds.
+     * @throws IllegalArgumentException if `charIdx` is out of bounds (less than 0 or greater than `length`).
      */
     fun charToLine(charIdx: Int): Int {
         require(charIdx in 0 .. length) { "Character index $charIdx out of bounds (0..$length)" }
-        if (charIdx == length && length > 0 && charAt(length - 1) != '\n') return lineCount
-        if (charIdx == length && length == 0) return 0
-        if (charIdx == length) return lineCount
+
+        if (length == 0) return 0
 
         var lines = 0
         for (i in 0 until charIdx) {
-            if (charAt(i) == '\n') {
+            if (i < length && charAt(i) == '\n') {
                 lines++
             }
         }
@@ -574,8 +597,7 @@ sealed class Rope {
         if (length == 0) return 0
         var maxLength = 0
         var currentLength = 0
-        for (i in 0 until length) {
-            val c = charAt(i)
+        for (c in this) {
             if (c == '\n') {
                 maxLength = maxOf(maxLength, currentLength)
                 currentLength = 0
@@ -597,16 +619,17 @@ sealed class Rope {
      */
     fun lineColToChar(lineIdx: Int, colIdx: Int): Int {
         val lineStartChar = lineToChar(lineIdx)
-        val lLength = lineLength(lineIdx)
+        val currentLine = line(lineIdx)
+        val lLength = currentLine.length
 
-        val effectiveLineLength = if (lLength > 0 && line(lineIdx).charAt(lLength - 1) == '\n') {
+        val effectiveContentLength = if (lLength > 0 && currentLine.charAt(lLength - 1) == '\n') {
             lLength - 1
         } else {
             lLength
         }
 
-        require(colIdx in 0 .. effectiveLineLength) {
-            "Column index $colIdx out of bounds for line $lineIdx (length $effectiveLineLength)"
+        require(colIdx in 0 .. effectiveContentLength) { // colIdx can be after last char on line
+            "Column index $colIdx out of bounds for line $lineIdx (content length $effectiveContentLength)"
         }
         return lineStartChar + colIdx
     }
@@ -621,11 +644,15 @@ sealed class Rope {
      */
     fun toPlainString(): String {
         if (length == 0) return ""
-        val sb = StringBuilder(length)
+        val sb = StringBuilder(length.coerceAtLeast(16)) // Ensure minimum capacity
         appendTo(sb)
         return sb.toString()
     }
 
+    /**
+     * Internal helper to recursively append content to a StringBuilder.
+     * This is efficient due to direct char array appends.
+     */
     private fun appendTo(sb: StringBuilder) {
         when (this) {
             is Leaf -> sb.appendRange(this.buffer, this.start, this.start + this.length)
@@ -634,5 +661,156 @@ sealed class Rope {
                 right.appendTo(sb)
             }
         }
+    }
+
+    /**
+     * Returns an iterator over the characters in this Rope.
+     */
+    final override fun iterator(): CharIterator = RopeIterator(this)
+
+    private class RopeIterator(rope: Rope) : CharIterator() {
+        private val stack = ArrayDeque<Rope>()
+        private var currentLeaf: Leaf? = null
+        private var indexInLeaf = 0
+
+        init {
+            var r = rope
+            while (r is Node) {
+                if (r.right.length > 0) stack.addLast(r.right)
+                r = r.left
+            }
+            if (r is Leaf && r.length > 0) {
+                currentLeaf = r
+            } else { // initial rope is empty or only contains empty leaves
+                advanceToNextLeaf()
+            }
+        }
+
+        private fun advanceToNextLeaf() {
+            currentLeaf = null
+            indexInLeaf = 0
+            while (stack.isNotEmpty()) {
+                var nextRope = stack.removeLast()
+                while (nextRope is Node) {
+                    if (nextRope.right.length > 0) stack.addLast(nextRope.right)
+                    nextRope = nextRope.left
+                }
+                if (nextRope is Leaf && nextRope.length > 0) {
+                    currentLeaf = nextRope
+                    return
+                }
+            }
+        }
+
+        override fun hasNext(): Boolean {
+            return currentLeaf != null && indexInLeaf < currentLeaf!!.length
+        }
+
+        override fun nextChar(): Char {
+            val leaf = currentLeaf ?: throw NoSuchElementException()
+            if (indexInLeaf >= leaf.length) throw NoSuchElementException()
+
+            val char = leaf.buffer[leaf.start + indexInLeaf]
+            indexInLeaf++
+
+            if (indexInLeaf >= leaf.length) {
+                advanceToNextLeaf()
+            }
+            return char
+        }
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is Rope) return false
+        if (length != other.length) return false
+        if (lineCount != other.lineCount) return false
+        if (hashCode() != other.hashCode()) return false
+
+        val iter1 = this.iterator()
+        val iter2 = other.iterator()
+        while (iter1.hasNext() && iter2.hasNext()) {
+            if (iter1.nextChar() != iter2.nextChar()) return false
+        }
+
+        return !iter1.hasNext() && !iter2.hasNext()
+    }
+
+    override fun hashCode(): Int {
+        var h = 1
+        for (char in this) {
+            h = 31 * h + char.hashCode()
+        }
+        return h
+    }
+
+    /**
+     * Finds the first occurrence of a given pattern string within the Rope,
+     * starting from a specified index.
+     *
+     * @param pattern The string pattern to search for.
+     * @param startIndex The 0-based index from which to start the search. Defaults to 0.
+     * @return The 0-based index of the first occurrence of the pattern, or -1 if not found.
+     */
+    fun indexOf(pattern: String, startIndex: Int = 0): Int {
+        if (pattern.isEmpty()) return startIndex.coerceIn(0, this.length)
+        val patternLen = pattern.length
+        if (patternLen == 0) return startIndex.coerceIn(0, this.length)
+
+        if (startIndex < 0 || patternLen > this.length - startIndex) {
+            return -1
+        }
+
+        val ropeLen = this.length
+        if (patternLen > ropeLen) return -1
+
+        val patternChars = pattern.toCharArray()
+
+        var i = startIndex
+        while (i <= ropeLen - patternLen) {
+            var match = true
+            for (j in 0 until patternLen) {
+                if (this.charAt(i + j) != patternChars[j]) {
+                    match = false
+                    break
+                }
+            }
+
+            if (match) return i
+            i++
+        }
+        return -1
+    }
+
+
+    /**
+     * Finds the last occurrence of a given pattern string within the Rope,
+     * searching backwards from a specified index.
+     *
+     * @param pattern The string pattern to search for.
+     * @param startIndex The 0-based index from which to start the search backwards.
+     * Defaults to the last possible start index for the pattern.
+     * @return The 0-based index of the first character of the last occurrence, or -1 if not found.
+     */
+    fun lastIndexOf(pattern: String, startIndex: Int = this.length - pattern.length): Int {
+        if (pattern.isEmpty()) return startIndex.coerceIn(0, this.length)
+        val patternLen = pattern.length
+        if (patternLen == 0) return startIndex.coerceIn(0, this.length)
+
+        if (patternLen > this.length) return -1
+
+        val effectiveStartIndex = startIndex.coerceIn(0, this.length - patternLen)
+
+        for (i in effectiveStartIndex downTo 0) {
+            var match = true
+            for (j in 0 until patternLen) {
+                if (this.charAt(i + j) != pattern[j]) {
+                    match = false
+                    break
+                }
+            }
+            if (match) return i
+        }
+        return -1
     }
 }

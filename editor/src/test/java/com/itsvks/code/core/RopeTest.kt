@@ -3,6 +3,7 @@ package com.itsvks.code.core
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class RopeTest {
@@ -392,10 +393,44 @@ class RopeTest {
         }
         val rope = Rope.fromFile(file)
 
-        assertEquals(fileContent, rope.toString())
+        assertEquals(fileContent, rope.toPlainString())
         assertEquals(56, rope.lineCount)
         assertEquals(fileContent.length, rope.length)
         assertEquals(79, rope.maxLineLength())
         assertEquals(66, rope.lineLength(47))
+    }
+
+    @Test
+    fun testIndexOf() {
+        val rope = Rope.fromString("hello world hello")
+        assertEquals(0, rope.indexOf('h'))
+        assertEquals(6, rope.indexOf('w'))
+        assertEquals(12, rope.indexOf("h", 7))
+        assertEquals(-1, rope.indexOf('z'))
+        assertEquals(-1, rope.indexOf("world", 13))
+        assertEquals(0, rope.indexOf("hello"))
+        assertEquals(12, rope.indexOf("hello", 7))
+        assertEquals(-1, rope.indexOf("xyz"))
+    }
+
+    @Test
+    fun testLastIndexOf() {
+        val rope = Rope.fromString("hello world hello")
+        assertEquals(12, rope.lastIndexOf('h'))
+        assertEquals(6, rope.lastIndexOf('w'))
+        assertEquals(0, rope.lastIndexOf("h", 6))
+        assertEquals(-1, rope.lastIndexOf('z'))
+        assertEquals(-1, rope.lastIndexOf("world", 5))
+        assertEquals(12, rope.lastIndexOf("hello"))
+        assertEquals(0, rope.lastIndexOf("hello", 6))
+        assertEquals(-1, rope.lastIndexOf("xyz"))
+    }
+
+    @Test
+    fun testContains() {
+        val rope = Rope.fromString("hello world hello")
+        assertTrue(rope.contains('h'))
+        assertTrue(rope.contains('w'))
+        assertFalse(rope.contains('z'))
     }
 }
