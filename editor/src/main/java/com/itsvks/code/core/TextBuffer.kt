@@ -9,7 +9,7 @@ fun rememberTextBuffer(initialText: String): TextBuffer {
     return remember(initialText) { TextBuffer.fromText(initialText) }
 }
 
-class TextBuffer private constructor(private var rope: Rope) {
+class TextBuffer private constructor( var rope: Rope) {
     companion object {
         @JvmStatic
         fun fromFile(path: String): TextBuffer {
