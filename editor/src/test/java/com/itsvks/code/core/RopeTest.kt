@@ -313,17 +313,17 @@ class RopeTest {
     @Test
     fun testLineLengthUpToValidCases() {
         val rope = Rope.fromString("ab\ncde\nfghi")
-        assertEquals(1, rope.lineColToChar(0, 1)) // line 0: "ab", col 1 → 1
-        assertEquals(4, rope.lineColToChar(1, 1)) // line 1 starts at 3 → 3 + 1
-        assertEquals(9, rope.lineColToChar(2, 2)) // line 2 starts at 7 → 7 + 2
+        assertEquals(1, rope.lineColumnToCharIndex(0, 1)) // line 0: "ab", col 1 → 1
+        assertEquals(4, rope.lineColumnToCharIndex(1, 1)) // line 1 starts at 3 → 3 + 1
+        assertEquals(9, rope.lineColumnToCharIndex(2, 2)) // line 2 starts at 7 → 7 + 2
     }
 
     @Test
     fun testLineLengthUpToAtLineStart() {
         val rope = Rope.fromString("a\nb\nc")
-        assertEquals(0, rope.lineColToChar(0, 0))
-        assertEquals(2, rope.lineColToChar(1, 0))
-        assertEquals(4, rope.lineColToChar(2, 0))
+        assertEquals(0, rope.lineColumnToCharIndex(0, 0))
+        assertEquals(2, rope.lineColumnToCharIndex(1, 0))
+        assertEquals(4, rope.lineColumnToCharIndex(2, 0))
     }
 
     @Test
@@ -432,5 +432,118 @@ class RopeTest {
         assertTrue(rope.contains('h'))
         assertTrue(rope.contains('w'))
         assertFalse(rope.contains('z'))
+        assertFalse('v' in rope)
+        assertTrue("hello" in rope)
+        assertFalse("xyz" in rope)
+        assertTrue("world" in rope)
+    }
+
+    @Test
+    fun testForEachLine_withTrailingNewline() {
+        val rope = Rope.fromString("a\nb\nc\n")
+        val lines = mutableListOf<String>()
+
+        rope.forEachLine {
+            lines.add(it.toPlainString())
+        }
+
+        assertEquals(listOf("a\n", "b\n", "c\n", ""), lines)
+    }
+
+    @Test
+    fun testForEachLine_withoutTrailingNewline() {
+        val rope = Rope.fromString("x\ny\nz")
+        val lines = mutableListOf<String>()
+
+        rope.forEachLine {
+            lines.add(it.toPlainString())
+        }
+
+        assertEquals(listOf("x\n", "y\n", "z"), lines)
+    }
+
+    @Test
+    fun testForEachLineIndexed() {
+        val rope = Rope.fromString("1\n2\n3\n")
+        val indexed = mutableListOf<Pair<Int, String>>()
+
+        rope.forEachLineIndexed { idx, line ->
+            indexed.add(idx to line.toPlainString())
+        }
+
+        assertEquals(
+            listOf(
+                0 to "1\n",
+                1 to "2\n",
+                2 to "3\n",
+                3 to ""
+            ),
+            indexed
+        )
+    }
+
+    @Test
+    fun testForLines_rangeMiddle() {
+        val rope = Rope.fromString("first\nsecond\nthird\nfourth\n")
+        val collected = mutableListOf<String>()
+
+        rope.forLines(1..2) {
+            collected.add(it.toPlainString())
+        }
+
+        assertEquals(listOf("second\n", "third\n"), collected)
+    }
+
+    @Test
+    fun testForLinesIndexed_safeEndBounds() {
+        val rope = Rope.fromString("a\nb\nc\n")
+        val result = mutableListOf<String>()
+
+        rope.forLinesIndexed(0, 10) { i, line ->
+            result.add("[$i] = ${line.toPlainString()}")
+        }
+
+        assertEquals(
+            listOf("[0] = a\n", "[1] = b\n", "[2] = c\n", "[3] = "),
+            result
+        )
+    }
+
+    @Test
+    fun testLines_returnsListOfLines() {
+        val rope = Rope.fromString("alpha\nbeta\ngamma")
+        val lines = rope.lines().map { it.toPlainString() }
+
+        assertEquals(listOf("alpha\n", "beta\n", "gamma"), lines)
+    }
+
+    @Test
+    fun testEmptyRope_returnsOneEmptyLine() {
+        val rope = Rope.fromString("")
+        val lines = mutableListOf<String>()
+
+        rope.forEachLine { lines.add(it.toPlainString()) }
+
+        assertEquals(listOf(""), lines)
+    }
+
+    @Test
+    fun testSingleLineNoNewline() {
+        val rope = Rope.fromString("hello")
+        val lines = mutableListOf<String>()
+
+        rope.forEachLine { lines.add(it.toPlainString()) }
+
+        assertEquals(listOf("hello"), lines)
+    }
+
+    @Test
+    fun testSingleLineWithNewline() {
+        val rope = Rope.fromString("hello\n")
+        val lines = mutableListOf<String>()
+
+        rope.forEachLine { lines.add(it.toPlainString()) }
+
+        assertEquals(listOf("hello\n", ""), lines)
     }
 }

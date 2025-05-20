@@ -1,5 +1,8 @@
 package com.itsvks.code.core
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.BufferedWriter
 import java.io.File
 import java.io.IOException
 
@@ -18,6 +21,9 @@ import java.io.IOException
  * Ropes are immutable; all modification operations return a new Rope instance, leaving the
  * original unchanged.
  *
+ * **Note**: This is simple implementation of Rope data structure. But it can still handle 1 million lines of text.
+ *           I will improve it in future.
+ *
  * @property length The total number of characters in the Rope.
  * @property lineCount The total number of lines in the Rope (number of newline characters).
  * The number of actual text lines is typically lineCount + 1.
@@ -25,6 +31,13 @@ import java.io.IOException
 sealed class Rope : Iterable<Char> {
     abstract val length: Int
     abstract val lineCount: Int // Represents the number of newline characters.
+
+    /**
+     * The total number of text lines in the Rope.
+     * This is typically `lineCount` (number of newline characters) + 1.
+     * For an empty Rope, it's considered to have 1 line (an empty line).
+     */
+    val totalLines: Int get() = lineCount + 1
 
     /**
      * Creates a deep copy of this Rope.
@@ -123,6 +136,27 @@ sealed class Rope : Iterable<Char> {
         }
     }
 
+    private fun writeRope(writer: BufferedWriter) {
+        when (this) {
+            is Leaf -> writer.write(buffer, start, length)
+            is Node -> {
+                left.writeRope(writer)
+                right.writeRope(writer)
+            }
+        }
+    }
+
+    /**
+     * Saves this rope to a file in a memory-efficient and high-performance manner.
+     *
+     * It works well for large files (even GBs), thanks to [BufferedWriter].
+     *
+     * @param file The destination [File] where the rope’s content should be saved.
+     */
+    suspend fun saveToFile(file: File) = withContext(Dispatchers.IO) {
+        file.bufferedWriter(Charsets.UTF_8).use(::writeRope)
+    }
+
     companion object {
         private const val MAX_LEAF_SIZE = 512
         private const val MIN_LEAF_SIZE = MAX_LEAF_SIZE / 4
@@ -218,7 +252,7 @@ sealed class Rope : Iterable<Char> {
             return buildTreeFromLeaves(leaves)
         }
 
-        internal fun buildTreeFromLeaves(ropes: List<Rope>): Rope {
+        private fun buildTreeFromLeaves(ropes: List<Rope>): Rope {
             if (ropes.isEmpty()) return Leaf("")
             if (ropes.size == 1) return ropes[0]
 
@@ -527,10 +561,10 @@ sealed class Rope : Iterable<Char> {
      * @return The character index (0-based) of the start of the specified line.
      * @throws IllegalArgumentException if `lineIdx` is out of bounds.
      */
-    fun lineToChar(lineIdx: Int): Int {
+    fun getLineStartCharIndex(lineIdx: Int): Int {
         val actualTextLines = if (length == 0 && lineCount == 0) 1 else lineCount + 1
         require(lineIdx in 0 ..< actualTextLines) {
-            "lineToChar: Line index $lineIdx out of bounds for $actualTextLines text lines (0..${actualTextLines - 1})"
+            "getLineStartCharIndex: Line index $lineIdx out of bounds for $actualTextLines text lines (0..${actualTextLines - 1})"
         }
 
         if (lineIdx == 0) return 0
@@ -559,7 +593,7 @@ sealed class Rope : Iterable<Char> {
      * @return The 0-based line number containing the character.
      * @throws IllegalArgumentException if `charIdx` is out of bounds (less than 0 or greater than `length`).
      */
-    fun charToLine(charIdx: Int): Int {
+    fun lineAt(charIdx: Int): Int {
         require(charIdx in 0 .. length) { "Character index $charIdx out of bounds (0..$length)" }
 
         if (length == 0) return 0
@@ -617,8 +651,8 @@ sealed class Rope : Iterable<Char> {
      * @return The absolute character index.
      * @throws IllegalArgumentException if lineIdx or colIdx are out of bounds.
      */
-    fun lineColToChar(lineIdx: Int, colIdx: Int): Int {
-        val lineStartChar = lineToChar(lineIdx)
+    fun lineColumnToCharIndex(lineIdx: Int, colIdx: Int): Int {
+        val lineStartChar = getLineStartCharIndex(lineIdx)
         val currentLine = line(lineIdx)
         val lLength = currentLine.length
 
@@ -634,6 +668,36 @@ sealed class Rope : Iterable<Char> {
         return lineStartChar + colIdx
     }
 
+    /** Iterates over lines in [start, end) */
+    inline fun forLines(start: Int, end: Int, action: (Rope) -> Unit) {
+        val last = end.coerceAtMost(totalLines)
+        for (i in start until last) {
+            action(line(i))
+        }
+    }
+
+    /** Iterates over lines with index in [start, end) */
+    inline fun forLinesIndexed(start: Int, end: Int, action: (Int, Rope) -> Unit) {
+        val last = end.coerceAtMost(totalLines)
+        for (i in start until last) {
+            action(i, line(i))
+        }
+    }
+
+    /** Iterates over lines in a range */
+    inline fun forLines(range: IntRange, action: (Rope) -> Unit) = forLines(range.first, range.last + 1, action)
+
+    /** Iterates over lines in a range with indices */
+    inline fun forLinesIndexed(range: IntRange, action: (Int, Rope) -> Unit) = forLinesIndexed(range.first, range.last + 1, action)
+
+    /** Iterates over all lines */
+    inline fun forEachLine(action: (Rope) -> Unit) = forLines(0, totalLines, action)
+
+    /** Iterates over all lines with index */
+    inline fun forEachLineIndexed(action: (Int, Rope) -> Unit) = forLinesIndexed(0, totalLines, action)
+
+    /** Returns all lines as a list of ropes */
+    fun lines(): List<Rope> = buildList(totalLines) { forEachLine { add(it) } }
 
     /**
      * Converts the Rope to a plain String.
@@ -813,4 +877,6 @@ sealed class Rope : Iterable<Char> {
         }
         return -1
     }
+
+    operator fun contains(pattern: String): Boolean = indexOf(pattern) != -1
 }
