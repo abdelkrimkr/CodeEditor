@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.itsvks.code"
+    namespace = "com.itsvks.code.example"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.itsvks.code"
+        applicationId = "com.itsvks.code.example"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -52,7 +52,8 @@ dependencies {
 
     implementation(libs.utilcodex)
 
-    implementation(project(":editor"))
+    //implementation(project(":editor"))
+    implementation(libs.codeeditor)
 
     testImplementation(libs.junit)
 

@@ -1,4 +1,4 @@
-package com.itsvks.code.ui.theme
+package com.itsvks.code.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

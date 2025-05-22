@@ -1,7 +1,10 @@
+import com.vanniktech.maven.publish.SonatypeHost
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.vanniktech.maven.publish") version "0.32.0"
 }
 
 android {
@@ -33,7 +36,6 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = true
     }
 }
 
@@ -58,4 +60,38 @@ dependencies {
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+}
+
+mavenPublishing {
+    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
+    signAllPublications()
+
+    coordinates("io.github.itsvks19", "codeeditor", "1.0.0")
+
+    pom {
+        name = "CodeEditor"
+        description = "A high-performance text/code editor for Android"
+        url = "https://github.com/itsvks19/CodeEditor"
+
+        licenses {
+            license {
+                name = "MIT License"
+                url = "https://opensource.org/licenses/MIT"
+            }
+        }
+
+        developers {
+            developer {
+                id = "itsvks19"
+                name = "Vivek"
+                email = "itsvks19@gmail.com"
+            }
+        }
+
+        scm {
+            connection = "scm:git:git://github.com/itsvks19/CodeEditor.git"
+            developerConnection = "scm:git:ssh://github.com/itsvks19/CodeEditor.git"
+            url = "https://github.com/itsvks19/CodeEditor"
+        }
+    }
 }

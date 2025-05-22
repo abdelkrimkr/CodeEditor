@@ -1,4 +1,4 @@
-package com.itsvks.code
+package com.itsvks.code.example
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -15,11 +15,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.itsvks.code.component.CodeEditor
 import com.itsvks.code.language.JavaLanguage
-import com.itsvks.code.language.KotlinLanguage
 import com.itsvks.code.theme.AtomOneDarkTheme
-import com.itsvks.code.theme.AtomOneLightTheme
-import com.itsvks.code.theme.VsCodeDarkTheme
-import com.itsvks.code.ui.theme.CodeEditorTheme
+import com.itsvks.code.example.ui.theme.CodeEditorTheme
+import com.itsvks.code.rememberCodeEditorState
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {

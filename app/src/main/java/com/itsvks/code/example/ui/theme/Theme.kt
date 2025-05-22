@@ -1,4 +1,4 @@
-package com.itsvks.code.ui.theme
+package com.itsvks.code.example.ui.theme
 
 import android.app.Activity
 import android.os.Build

@@ -60,7 +60,7 @@ sealed class Rope : Iterable<Char> {
      * @param length The number of characters in this leaf's segment.
      * @param lineCount The number of newline characters ('\n') within this leaf's segment.
      */
-    data class Leaf internal constructor(
+    data class Leaf(
         val buffer: CharArray,
         val start: Int,
         override val length: Int,
