@@ -5,27 +5,22 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import com.itsvks.code.component.CodeEditor
+import com.itsvks.code.language.JavaLanguage
 import com.itsvks.code.language.KotlinLanguage
-import com.itsvks.code.language.RustLanguage
 import com.itsvks.code.theme.AtomOneDarkTheme
+import com.itsvks.code.theme.AtomOneLightTheme
+import com.itsvks.code.theme.VsCodeDarkTheme
 import com.itsvks.code.ui.theme.CodeEditorTheme
 import kotlinx.coroutines.delay
-import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,34 +34,29 @@ class MainActivity : ComponentActivity() {
                         .fillMaxSize()
                         .imePadding()
                 ) { innerPadding ->
-                    LaunchedEffect(Unit) {
-                        assets.open("sample.rs").bufferedReader().use {
-                            File(filesDir, "sample.rs").writeText(it.readText())
-                        }
-                    }
-
                     val editorState = rememberCodeEditorState(
-                        filePath = File(filesDir, "sample.rs").absolutePath,
-                        language = RustLanguage,
+                        assets.open("View.java"),
+                        language = JavaLanguage,
                         theme = AtomOneDarkTheme
                     )
 
                     LaunchedEffect(Unit) {
                         delay(3000)
-                        val rust = assets.open("sample.rs").bufferedReader().use { it.readText() }
-//                        editorState.setText(rust)
-//                        editorState.language = RustLanguage
+//                        editorState.setInputStream(assets.open("temp.kt"))
+//                        editorState.language = KotlinLanguage
+//                        editorState.theme = AtomOneLightTheme
                     }
 
                     CodeEditor(
                         state = editorState,
                         cursorWidth = 2f,
                         blinkCursor = true,
+                        softWrap = false,
                         showInvisibleCharacters = true,
                         modifier = Modifier
+                            .fillMaxSize()
                             .padding(innerPadding)
                             .imePadding()
-                            //.height(500.dp)
                     )
                 }
             }

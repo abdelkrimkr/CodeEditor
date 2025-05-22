@@ -8,6 +8,7 @@ import androidx.compose.ui.focus.FocusEventModifierNode
 import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.PlatformTextInputMethodRequest
 import androidx.compose.ui.platform.PlatformTextInputModifierNode
 import androidx.compose.ui.platform.PlatformTextInputSession
@@ -17,7 +18,7 @@ import com.itsvks.code.CodeEditorState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-class CodeEditorTextInputNode(
+internal class CodeEditorTextInputNode(
     var state: CodeEditorState,
     var softwareKeyboardController: SoftwareKeyboardController?,
     var sendKeyEventHandler: suspend (KeyEvent) -> Boolean
@@ -63,11 +64,18 @@ class CodeEditorTextInputNode(
     }
 }
 
-data class CodeEditorTextInputElement(
+internal data class CodeEditorTextInputElement(
     private val state: CodeEditorState,
     private val keyboardController: SoftwareKeyboardController?,
     private val sendKeyEventHandler: suspend (KeyEvent) -> Boolean
 ) : ModifierNodeElement<CodeEditorTextInputNode>() {
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "codeEditorTextInput"
+        properties["state"] = state
+        properties["keyboardController"] = keyboardController
+        properties["sendKeyEventHandler"] = sendKeyEventHandler
+    }
 
     override fun create(): CodeEditorTextInputNode {
         return CodeEditorTextInputNode(state, keyboardController, sendKeyEventHandler)

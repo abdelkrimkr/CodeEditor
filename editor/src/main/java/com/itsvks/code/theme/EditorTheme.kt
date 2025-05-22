@@ -11,6 +11,7 @@ interface EditorTheme {
     val gutterBgColor: Color
     val gutterTextColor: Color get() = defaultTextColor.copy(alpha = 0.6f)
     val invisibleCharColor: Color get() = Color(0xFFAAAAAA)
+    val selectionHandleColor: Color get() = cursorColor
 
     fun getColorForToken(type: TokenType): Color
 }

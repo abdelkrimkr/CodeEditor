@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import java.io.BufferedWriter
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 
 /**
  * Represents an immutable sequence of characters, optimized for efficient editing operations
@@ -31,6 +32,8 @@ import java.io.IOException
 sealed class Rope : Iterable<Char> {
     abstract val length: Int
     abstract val lineCount: Int // Represents the number of newline characters.
+
+    abstract val version: Int
 
     /**
      * The total number of text lines in the Rope.
@@ -63,6 +66,8 @@ sealed class Rope : Iterable<Char> {
         override val length: Int,
         override val lineCount: Int,
     ) : Rope() {
+        override val version: Int get() = hashCode()
+
         constructor(text: String) : this(text.toCharArray(), 0, text.length, text.count { it == '\n' })
 
         /**
@@ -122,6 +127,7 @@ sealed class Rope : Iterable<Char> {
     data class Node(val left: Rope, val right: Rope) : Rope() {
         override val length = left.length + right.length
         override val lineCount = left.lineCount + right.lineCount
+        override val version: Int get() = left.version + right.version
 
         /**
          * Returns a structural string representation of this node for debugging.
@@ -221,14 +227,33 @@ sealed class Rope : Iterable<Char> {
          */
         @JvmStatic
         fun fromFile(file: File): Rope {
+            try {
+                return fromStream(file.inputStream())
+            } catch (e: IOException) {
+                System.err.println("Error reading file ${file.path}: ${e.message}")
+                throw e
+            }
+        }
+
+        /**
+         * Creates a Rope from an [InputStream].
+         *
+         * If the stream is empty, an empty Leaf Rope is returned.
+         * The stream is automatically closed after reading.
+         *
+         * @param stream The [InputStream] to read content from.
+         * @return A [Rope] instance representing the content of the stream.
+         * @throws java.io.IOException if an error occurs during stream reading.
+         */
+        @JvmStatic
+        fun fromStream(stream: InputStream): Rope {
             val leaves = mutableListOf<Rope>()
-            val bufferSize = MAX_LEAF_SIZE
-            val charBuffer = CharArray(bufferSize)
+            val charBuffer = CharArray(MAX_LEAF_SIZE)
 
             try {
-                file.bufferedReader(Charsets.UTF_8).use { reader ->
+                stream.bufferedReader(Charsets.UTF_8).use { reader ->
                     var charsRead: Int
-                    while (reader.read(charBuffer, 0, bufferSize).also { charsRead = it } != -1) {
+                    while (reader.read(charBuffer, 0, MAX_LEAF_SIZE).also { charsRead = it } != -1) {
                         if (charsRead > 0) {
                             val currentChunkData = charBuffer.copyOfRange(0, charsRead)
 
@@ -244,7 +269,7 @@ sealed class Rope : Iterable<Char> {
                     }
                 }
             } catch (e: IOException) {
-                System.err.println("Error reading file ${file.path}: ${e.message}")
+                System.err.println("Error reading input stream")
                 throw e
             }
 
@@ -724,6 +749,44 @@ sealed class Rope : Iterable<Char> {
                 left.appendTo(sb)
                 right.appendTo(sb)
             }
+        }
+    }
+
+    fun asCharSequence(): CharSequence = object : CharSequence {
+        override val length = this@Rope.length
+
+        override fun get(index: Int): Char {
+            require(index in indices) { "Index out of bounds: $index" }
+
+            var current = index
+            val stack = ArrayDeque<Rope>()
+            stack.addLast(this@Rope)
+
+            while (stack.isNotEmpty()) {
+                when (val node = stack.removeLast()) {
+                    is Leaf -> if (current < node.length) return node[current] else current -= node.length
+                    is Node -> {
+                        stack.addLast(node.right)
+                        stack.addLast(node.left)
+                    }
+                }
+            }
+
+            error("Char at index $index not found in Rope")
+        }
+
+        override fun subSequence(startIndex: Int, endIndex: Int): CharSequence {
+            require(startIndex in 0 .. endIndex && endIndex <= length) { "Invalid subSequence range" }
+
+            val sb = StringBuilder(endIndex - startIndex)
+            for (i in startIndex until endIndex) {
+                sb.append(this[i])
+            }
+            return sb
+        }
+
+        override fun toString(): String {
+            return this@Rope.toPlainString()
         }
     }
 
