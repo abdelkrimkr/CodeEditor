@@ -1,9 +1,6 @@
-# CodeEditor
+# CodeViewer
 
-**CodeEditor** is a high-performance, modern text editor component for Android. Built around a custom `Rope` data structure, it can handle editing of files with **over 1 million lines** while maintaining smooth, responsive performance.
-
-> [!TIP]
-> Perfect for code editors, IDEs, or any application requiring efficient large-text editing on Android.
+**CodeViewer** is a high-performance, modern code view component for Android. It can handle files with **over 1 million lines** while maintaining smooth, responsive performance.
 
 ## Features
 
@@ -45,9 +42,8 @@ val editorState = rememberCodeEditorState(
 CodeEditor(
     state = editorState,
     fontSize = 14.sp,
-    blinkCursor = true,
+    gutterWidth = 48.dp,
     softWrap = false,
-    showInvisibleCharacters = true,
     modifier = Modifier.fillMaxSize()
 )
 ```

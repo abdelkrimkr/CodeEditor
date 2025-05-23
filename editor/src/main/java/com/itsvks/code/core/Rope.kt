@@ -310,7 +310,7 @@ sealed class Rope : Iterable<Char> {
 
             // Case 2: r1 is Node(L, R1_leaf) and r2 is R2_leaf. Try to merge R1_leaf and R2_leaf.
             if (r1 is Node && r1.right is Leaf && r2 is Leaf) {
-                val r1Right = r1.right as Leaf
+                val r1Right = r1.right
                 // Try to merge if combined is within MAX_LEAF_SIZE or if one is tiny
                 if (r1Right.length + r2.length <= MAX_LEAF_SIZE ||
                     ((r1Right.length < MIN_LEAF_SIZE || r2.length < MIN_LEAF_SIZE)
@@ -325,7 +325,7 @@ sealed class Rope : Iterable<Char> {
 
             // Case 3: r1 is L1_leaf and r2 is Node(L2_leaf, R). Try to merge L1_leaf and L2_leaf.
             if (r1 is Leaf && r2 is Node && r2.left is Leaf) {
-                val r2Left = r2.left as Leaf
+                val r2Left = r2.left
                 if (r1.length + r2Left.length <= MAX_LEAF_SIZE ||
                     ((r1.length < MIN_LEAF_SIZE || r2Left.length < MIN_LEAF_SIZE) && r1.length + r2Left.length <= MAX_LEAF_SIZE + MIN_LEAF_SIZE / 2)
                 ) {

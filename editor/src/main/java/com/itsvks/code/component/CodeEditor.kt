@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -15,6 +16,7 @@ import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
@@ -37,11 +39,7 @@ fun CodeEditor(
     fontSize: TextUnit = 14.sp,
     softWrap: Boolean = false,
     gutterWidth: Dp = 48.dp,
-    horizontalPadding: Dp = 8.dp,
-    cursorWidth: Float = 2f,
-    cursorBlinkDuration: Long = 500,
-    blinkCursor: Boolean = true,
-    showInvisibleCharacters: Boolean = false
+    horizontalPadding: Dp = 8.dp
 ) {
     val fontFamily = rememberJetBrainsMonoFontFamily()
     val listState = rememberLazyListState()
@@ -89,6 +87,8 @@ fun CodeEditor(
                                     )
                                 }
                             }
+
+                            VerticalDivider(modifier = Modifier.fillMaxHeight())
 
                             Box(
                                 modifier = Modifier

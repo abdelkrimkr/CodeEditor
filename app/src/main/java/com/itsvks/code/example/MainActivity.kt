@@ -13,6 +13,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.itsvks.code.component.CodeEditor
 import com.itsvks.code.language.JavaLanguage
 import com.itsvks.code.theme.AtomOneDarkTheme
@@ -47,10 +49,9 @@ class MainActivity : ComponentActivity() {
 
                     CodeEditor(
                         state = editorState,
-                        cursorWidth = 2f,
-                        blinkCursor = true,
                         softWrap = false,
-                        showInvisibleCharacters = true,
+                        fontSize = 14.sp,
+                        gutterWidth = 48.dp,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(innerPadding)

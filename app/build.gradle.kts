@@ -52,8 +52,8 @@ dependencies {
 
     implementation(libs.utilcodex)
 
-    //implementation(project(":editor"))
-    implementation(libs.codeeditor)
+    implementation(project(":editor"))
+//    implementation(libs.codeeditor)
 
     testImplementation(libs.junit)
 
