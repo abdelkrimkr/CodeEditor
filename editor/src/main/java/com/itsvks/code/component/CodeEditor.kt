@@ -175,18 +175,17 @@ fun CodeEditor(
                                     BasicTextField(
                                         value = textFieldValue,
                                         onValueChange = {
-                                            val updatedTextFieldValue = if (it.text.length != textFieldValue.text.length) {
-                                                handleBracketPairMatch(it, textFieldValue)
-                                            } else it
+                                            var updated = handleAutoIndent(it, textFieldValue)
+                                            updated = handleBracketPairMatch(updated, textFieldValue)
 
                                             textFieldValue = TextFieldValue(
-                                                updatedTextFieldValue.annotatedString.highlight(
+                                                updated.annotatedString.highlight(
                                                     theme = theme,
                                                     syntaxHighlighter = syntaxHighlighter,
-                                                    bracketIndices = findBracketIndices(updatedTextFieldValue)
+                                                    bracketIndices = findBracketIndices(updated)
                                                 ),
-                                                selection = updatedTextFieldValue.selection,
-                                                composition = updatedTextFieldValue.composition
+                                                selection = updated.selection,
+                                                composition = updated.composition
                                             )
                                         },
                                         singleLine = !softWrap,
@@ -292,6 +291,62 @@ private fun handleBracketPairMatch(
         else -> newValue
     }
     return updatedTextFieldValue
+}
+
+private fun handleAutoIndent(
+    newValue: TextFieldValue,
+    oldValue: TextFieldValue
+): TextFieldValue {
+    val oldText = oldValue.text
+    val newText = newValue.text
+    val cursor = newValue.selection.start
+    val oldCursor = oldValue.selection.start
+
+    val isNewline = cursor > 0 &&
+            cursor > oldCursor &&
+            newText.length > oldText.length &&
+            newText.getOrNull(cursor - 1) == '\n'
+
+    if (!isNewline) return newValue
+
+    val before = newText.substring(0, cursor)
+    val after = newText.substring(cursor)
+
+    val lines = before.lines()
+    val prevLine = lines.getOrNull(lines.size - 2) ?: ""
+    val indentMatch = Regex("^[ \t]*").find(prevLine)
+    val baseIndent = indentMatch?.value ?: ""
+
+    val trimmedPrev = prevLine.trimEnd()
+    val extraIndent = if (trimmedPrev.endsWith("{") || trimmedPrev.endsWith("[") || trimmedPrev.endsWith("(")) {
+        "    "
+    } else ""
+
+    val currentIndent = baseIndent + extraIndent
+    val nextChar = after.firstOrNull()
+
+    val isClosingBracket = nextChar in listOf(')', '}', ']')
+
+    if (isClosingBracket && currentIndent.length >= 4) {
+        val closingLine = baseIndent + nextChar + after.drop(1)
+        val finalText = before + currentIndent + "\n" + closingLine
+        val finalCursor = (before + currentIndent).length
+
+        return TextFieldValue(
+            text = finalText,
+            selection = TextRange(finalCursor),
+            composition = newValue.composition
+        )
+    }
+
+    val finalText = before + currentIndent + after
+    val finalCursor = cursor + currentIndent.length
+
+    return TextFieldValue(
+        text = finalText,
+        selection = TextRange(finalCursor),
+        composition = newValue.composition
+    )
 }
 
 private fun findBracketIndices(textFieldValue: TextFieldValue): Set<Int> {
