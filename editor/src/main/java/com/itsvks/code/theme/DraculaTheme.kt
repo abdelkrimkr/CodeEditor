@@ -18,21 +18,21 @@ object DraculaTheme : EditorTheme {
     override val scrollBarSelectedColor = Color(0x80FFFFFF)
     override val scrollBarColor = Color(0x80444444)
 
-    override fun getColorForToken(type: TokenType): Color = when (type) {
-        TokenType.PLAIN -> defaultTextColor
-        TokenType.KEYWORD -> Color(0xFFFF79C6)
-        TokenType.TYPE -> Color(0xFF8BE9FD)
-        TokenType.STRING -> Color(0xFFF1FA8C)
-        TokenType.COMMENT -> Color(0xFF6272A4)
-        TokenType.NUMBER -> Color(0xFFFFB86C)
-        TokenType.OPERATOR -> Color(0xFFBD93F9)
-        TokenType.PUNCTUATION -> Color(0xFFF8F8F2)
-        TokenType.FUNCTION -> Color(0xFF50FA7B)
-        TokenType.IDENTIFIER -> defaultTextColor
-        TokenType.ANNOTATION -> Color(0xFFFFB86C)
-        TokenType.MACRO -> Color(0xFFFF5555)
-        TokenType.ATTRIBUTE -> Color(0xFF8BE9FD)
-        TokenType.CONST -> Color(0xFFFF79C6)
-        TokenType.STATIC -> Color(0xFFBD93F9)
+    override fun getStyleForToken(type: TokenType) = when (type) {
+        TokenType.PLAIN -> TokenStyle(defaultTextColor)
+        TokenType.KEYWORD -> TokenStyle(Color(0xFFFF79C6))
+        TokenType.TYPE -> TokenStyle(Color(0xFF8BE9FD))
+        TokenType.STRING -> TokenStyle(Color(0xFFF1FA8C))
+        TokenType.COMMENT -> TokenStyle(Color(0xFF6272A4), italic = true)
+        TokenType.NUMBER -> TokenStyle(Color(0xFFFFB86C))
+        TokenType.OPERATOR -> TokenStyle(Color(0xFFBD93F9))
+        TokenType.PUNCTUATION -> TokenStyle(Color(0xFFF8F8F2))
+        TokenType.FUNCTION -> TokenStyle(Color(0xFF50FA7B))
+        TokenType.IDENTIFIER -> TokenStyle(defaultTextColor)
+        TokenType.ANNOTATION -> TokenStyle(Color(0xFFFFB86C))
+        TokenType.MACRO -> TokenStyle(Color(0xFFFF5555))
+        TokenType.ATTRIBUTE -> TokenStyle(Color(0xFF8BE9FD))
+        TokenType.CONST -> TokenStyle(Color(0xFFFF79C6))
+        TokenType.STATIC -> TokenStyle(Color(0xFFBD93F9))
     }
 }

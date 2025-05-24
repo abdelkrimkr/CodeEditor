@@ -45,9 +45,8 @@ val editorState = rememberCodeEditorState(
 
 CodeEditor(
     state = editorState,
-    fontSize = 14.sp,
-    gutterWidth = 48.dp,
-    softWrap = false,
+    initialFontSize = 14.sp,
+    softWrap = true,
     modifier = Modifier.fillMaxSize()
 )
 ```

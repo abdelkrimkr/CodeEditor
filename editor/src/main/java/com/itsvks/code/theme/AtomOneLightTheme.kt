@@ -18,21 +18,21 @@ object AtomOneLightTheme : EditorTheme {
     override val scrollBarSelectedColor = Color(0x80000000)
     override val scrollBarColor = Color(0x80808080)
 
-    override fun getColorForToken(type: TokenType): Color = when (type) {
-        TokenType.PLAIN -> defaultTextColor
-        TokenType.KEYWORD -> Color(0xFFA626A4)
-        TokenType.TYPE -> Color(0xFF0184BC)
-        TokenType.STRING -> Color(0xFF50A14F)
-        TokenType.COMMENT -> Color(0xFFA0A1A7)
-        TokenType.NUMBER -> Color(0xFF986801)
-        TokenType.OPERATOR -> Color(0xFF0184BC)
-        TokenType.PUNCTUATION -> Color(0xFF383A42)
-        TokenType.FUNCTION -> Color(0xFF4078F2)
-        TokenType.IDENTIFIER -> defaultTextColor
-        TokenType.ANNOTATION -> Color(0xFFB33C3C)
-        TokenType.MACRO -> Color(0xFFD73A49)
-        TokenType.ATTRIBUTE -> Color(0xFF986801)
-        TokenType.CONST -> Color(0xFF005CC5)
-        TokenType.STATIC -> Color(0xFF032F62)
+    override fun getStyleForToken(type: TokenType) = when (type) {
+        TokenType.PLAIN -> TokenStyle(defaultTextColor)
+        TokenType.KEYWORD -> TokenStyle(Color(0xFFA626A4))
+        TokenType.TYPE -> TokenStyle(Color(0xFF0184BC))
+        TokenType.STRING -> TokenStyle(Color(0xFF50A14F))
+        TokenType.COMMENT -> TokenStyle(Color(0xFFA0A1A7), italic = true)
+        TokenType.NUMBER -> TokenStyle(Color(0xFF986801))
+        TokenType.OPERATOR -> TokenStyle(Color(0xFF0184BC))
+        TokenType.PUNCTUATION -> TokenStyle(Color(0xFF383A42))
+        TokenType.FUNCTION -> TokenStyle(Color(0xFF4078F2))
+        TokenType.IDENTIFIER -> TokenStyle(defaultTextColor)
+        TokenType.ANNOTATION -> TokenStyle(Color(0xFFB33C3C))
+        TokenType.MACRO -> TokenStyle(Color(0xFFD73A49))
+        TokenType.ATTRIBUTE -> TokenStyle(Color(0xFF986801))
+        TokenType.CONST -> TokenStyle(Color(0xFF005CC5))
+        TokenType.STATIC -> TokenStyle(Color(0xFF032F62))
     }
 }

@@ -25,7 +25,7 @@ interface EditorTheme {
     val scrollBarSelectedColor: Color get() = Color.White.copy(alpha = 0.5f)
     val scrollBarColor: Color get() = Color.LightGray.copy(alpha = 0.5f)
 
-    fun getColorForToken(type: TokenType): Color
+    fun getStyleForToken(type: TokenType): SpanStyle
 }
 
 internal fun AnnotatedString.highlight(
@@ -57,7 +57,7 @@ private fun AnnotatedString.Builder.highlightToken(
     bracketIndices: Set<Int>
 ) {
     tokens.fastForEach { token ->
-        val color = theme.getColorForToken(token.type)
+        val baseStyle = theme.getStyleForToken(token.type)
         val start = token.start
         val end = token.end
 
@@ -65,12 +65,13 @@ private fun AnnotatedString.Builder.highlightToken(
             val char = line[i]
             val isBracket = i in bracketIndices
             val style = if (isBracket) {
-                SpanStyle(
-                    color = Color.Yellow, background = Color(0x33FFFFFF),
+                baseStyle.copy(
+                    color = Color.Yellow,
+                    background = Color(0x33FFFFFF),
                     fontWeight = FontWeight.Bold
                 )
             } else {
-                SpanStyle(color = color)
+                baseStyle
             }
             pushStyle(style)
             append(char)

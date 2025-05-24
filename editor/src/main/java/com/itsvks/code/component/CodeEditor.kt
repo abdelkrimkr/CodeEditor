@@ -3,8 +3,8 @@ package com.itsvks.code.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -88,11 +88,13 @@ fun CodeEditor(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .then(if (enableZoomGestures) Modifier.pointerInput(Unit) {
-                detectTransformGestures(panZoomLock = true) { _, _, zoom, _ ->
-                    fontSize *= zoom
-                }
-            } else Modifier)
+            .then(
+                if (enableZoomGestures) Modifier.pointerInput(Unit) {
+                    detectTransformGestures(panZoomLock = true) { _, _, zoom, _ ->
+                        fontSize *= zoom
+                    }
+                } else Modifier
+            )
     ) {
         SelectionContainer {
             CompositionLocalProvider(LocalTextSelectionColors provides selectionColors) {
@@ -113,7 +115,7 @@ fun CodeEditor(
                             .then(if (!softWrap) Modifier.horizontalScroll(rememberScrollState()) else Modifier)
                             .background(theme.backgroundColor),
                         state = listState,
-                        contentPadding = PaddingValues(vertical = 2.dp)
+                        verticalArrangement = Arrangement.spacedBy(1.dp)
                     ) {
                         items(rope.lineCount, key = { it }) { lineIdx ->
                             Row {
@@ -129,24 +131,18 @@ fun CodeEditor(
                                         .drawWithCache {
                                             onDrawBehind {
                                                 val width = size.width + horizontalPadding.toPx()
-                                                val height = max(size.width, lineHeight.toFloat())
+                                                val height = max(size.height, lineHeight.toFloat())
 
-                                                if (isLineFocused) {
-                                                    drawRect(
-                                                        color = theme.activeLineColor,
-                                                        size = Size(width, height)
-                                                    )
-                                                } else {
-                                                    drawRect(
-                                                        color = theme.gutterBgColor,
-                                                        size = Size(width, height)
-                                                    )
-                                                }
+                                                drawRect(
+                                                    color = if (isLineFocused) theme.activeLineColor else theme.gutterBgColor,
+                                                    topLeft = Offset(0f, (-0.5f).dp.toPx()),
+                                                    size = Size(width, height + 1.5f.dp.toPx())
+                                                )
 
                                                 drawLine(
                                                     color = theme.gutterBorderColor,
-                                                    start = Offset(width, 0f),
-                                                    end = Offset(width, height),
+                                                    start = Offset(width, (-0.5f).dp.toPx()),
+                                                    end = Offset(width, height + 1.5f.dp.toPx()),
                                                     strokeWidth = 1f
                                                 )
                                             }
@@ -240,9 +236,9 @@ fun CodeEditor(
     }
 }
 
-private fun findBracketIndices(it: TextFieldValue): Set<Int> {
-    val cursorPos = it.selection.start
-    val text = it.text
+private fun findBracketIndices(textFieldValue: TextFieldValue): Set<Int> {
+    val cursorPos = textFieldValue.selection.start
+    val text = textFieldValue.text
     val brackets = setOf('(', ')', '{', '}', '[', ']')
 
     val bracketIndices = when {

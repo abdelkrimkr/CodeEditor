@@ -1,6 +1,7 @@
 package com.itsvks.code.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
 import com.itsvks.code.syntax.TokenType
 
 object JetBrainsDarkTheme : EditorTheme {
@@ -17,21 +18,21 @@ object JetBrainsDarkTheme : EditorTheme {
     override val scrollBarSelectedColor = Color(0x80CCCCCC)
     override val scrollBarColor = Color(0x802F2F2F)
 
-    override fun getColorForToken(type: TokenType): Color = when (type) {
-        TokenType.PLAIN -> defaultTextColor
-        TokenType.KEYWORD -> Color(0xFFCC7832)
-        TokenType.TYPE -> Color(0xFF287BDE)
-        TokenType.STRING -> Color(0xFF6A8759)
-        TokenType.COMMENT -> Color(0xFF808080)
-        TokenType.NUMBER -> Color(0xFF6897BB)
-        TokenType.OPERATOR -> Color(0xFF89DDFF)
-        TokenType.PUNCTUATION -> Color(0xFFA9B7C6)
-        TokenType.FUNCTION -> Color(0xFFFFC66D)
-        TokenType.IDENTIFIER -> defaultTextColor
-        TokenType.ANNOTATION -> Color(0xFFBBB529)
-        TokenType.MACRO -> Color(0xFF9876AA)
-        TokenType.ATTRIBUTE -> Color(0xFFDAA520)
-        TokenType.CONST -> Color(0xFF9876AA)
-        TokenType.STATIC -> Color(0xFF9876AA)
+    override fun getStyleForToken(type: TokenType)= when (type) {
+        TokenType.PLAIN -> TokenStyle(defaultTextColor)
+        TokenType.KEYWORD -> TokenStyle(Color(0xFFCC7832))
+        TokenType.TYPE -> TokenStyle(Color(0xFF287BDE))
+        TokenType.STRING -> TokenStyle(Color(0xFF6A8759))
+        TokenType.COMMENT -> TokenStyle(Color(0xFF808080), italic = true)
+        TokenType.NUMBER -> TokenStyle(Color(0xFF6897BB))
+        TokenType.OPERATOR -> TokenStyle(Color(0xFF89DDFF))
+        TokenType.PUNCTUATION -> TokenStyle(Color(0xFFA9B7C6))
+        TokenType.FUNCTION -> TokenStyle(Color(0xFFFFC66D), italic = true)
+        TokenType.IDENTIFIER -> TokenStyle(defaultTextColor)
+        TokenType.ANNOTATION -> TokenStyle(Color(0xFFBBB529))
+        TokenType.MACRO -> TokenStyle(Color(0xFF9876AA))
+        TokenType.ATTRIBUTE -> TokenStyle(Color(0xFFDAA520))
+        TokenType.CONST -> TokenStyle(Color(0xFF9876AA))
+        TokenType.STATIC -> TokenStyle(Color(0xFF9876AA))
     }
 }
