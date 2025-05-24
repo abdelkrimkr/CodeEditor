@@ -224,7 +224,7 @@ fun CodeEditor(
                                                         onDrawBehind {
                                                             drawRect(
                                                                 color = theme.activeLineColor,
-                                                                topLeft = Offset(-horizontalPadding.toPx() + 1, 0f)
+                                                                topLeft = Offset(-horizontalPadding.toPx() + 1, 0f)//+1 for gutter border width
                                                             )
                                                         }
                                                     } else Modifier)
