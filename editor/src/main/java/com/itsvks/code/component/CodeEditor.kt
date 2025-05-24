@@ -175,31 +175,9 @@ fun CodeEditor(
                                     BasicTextField(
                                         value = textFieldValue,
                                         onValueChange = {
-                                            val bracketIndices = findBracketIndices(it)
-
-                                            val text = it.text
-                                            val cursor = it.selection.start
-
-                                            val shouldInsertPair = cursor > 0 &&
-                                                    bracketPairs.containsKey(text.getOrNull(cursor - 1)) &&
-                                                    (text.getOrNull(cursor) != bracketPairs[text[cursor - 1]]) &&
-                                                    it.text != textFieldValue.text
-
-                                            val updatedTextFieldValue = if (shouldInsertPair) {
-                                                val open = text[cursor - 1]
-                                                val close = bracketPairs[open] ?: error("Unmatched bracket")
-
-                                                val before = text.substring(0, cursor)
-                                                val after = text.substring(cursor)
-
-                                                TextFieldValue(
-                                                    text = before + close + after,
-                                                    selection = TextRange(cursor, cursor),
-                                                    composition = it.composition
-                                                )
-                                            } else {
-                                                it
-                                            }
+                                            val updatedTextFieldValue = if (it.text.length != textFieldValue.text.length) {
+                                                handleBracketPairMatch(it, textFieldValue)
+                                            } else it
 
                                             textFieldValue = TextFieldValue(
                                                 updatedTextFieldValue.annotatedString.highlight(
@@ -260,6 +238,60 @@ fun CodeEditor(
             }
         }
     }
+}
+
+private fun handleBracketPairMatch(
+    newValue: TextFieldValue,
+    oldValue: TextFieldValue
+): TextFieldValue {
+    val text = newValue.text
+    val cursor = newValue.selection.start
+    val oldCursor = oldValue.selection.start
+    val oldText = oldValue.text
+
+    val typedChar = if (cursor > oldCursor && oldCursor in oldText.indices) {
+        text.getOrNull(oldCursor)
+    } else null
+
+    val isClosingBracket = typedChar in bracketPairs.values
+    val atCursorChar = text.getOrNull(cursor)
+
+    val skipClosing = isClosingBracket && typedChar == atCursorChar &&
+            atCursorChar !in listOf('"', '\'')
+
+    val updatedTextFieldValue = when {
+        // skip over closing bracket if already present
+        skipClosing -> {
+            TextFieldValue(
+                text = oldText,
+                selection = TextRange(cursor + 1),
+                composition = newValue.composition
+            )
+        }
+
+        // insert closing pair only if a new bracket was just typed
+        cursor > 0 &&
+                text.length == oldText.length + 1 &&
+                cursor > oldCursor &&
+                bracketPairs.containsKey(text.getOrNull(cursor - 1)) &&
+                text.getOrNull(cursor) != bracketPairs[text[cursor - 1]] -> {
+
+            val open = text[cursor - 1]
+            val close = bracketPairs[open]!!
+
+            val before = text.substring(0, cursor)
+            val after = text.substring(cursor)
+
+            TextFieldValue(
+                text = before + close + after,
+                selection = TextRange(cursor, cursor),
+                composition = newValue.composition
+            )
+        }
+
+        else -> newValue
+    }
+    return updatedTextFieldValue
 }
 
 private fun findBracketIndices(textFieldValue: TextFieldValue): Set<Int> {
