@@ -50,6 +50,7 @@ dependencies {
     implementation(libs.androidx.material3)
 
     implementation(libs.utilcodex)
+    implementation(libs.lazycolumnscrollbar)
 
     testImplementation(kotlin("test"))
 

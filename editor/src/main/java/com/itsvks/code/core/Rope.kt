@@ -228,7 +228,7 @@ sealed class Rope : Iterable<Char> {
         @JvmStatic
         fun fromFile(file: File): Rope {
             try {
-                return fromStream(file.inputStream())
+                return fromInputStream(file.inputStream())
             } catch (e: IOException) {
                 System.err.println("Error reading file ${file.path}: ${e.message}")
                 throw e
@@ -246,7 +246,7 @@ sealed class Rope : Iterable<Char> {
          * @throws java.io.IOException if an error occurs during stream reading.
          */
         @JvmStatic
-        fun fromStream(stream: InputStream): Rope {
+        fun fromInputStream(stream: InputStream): Rope {
             val leaves = mutableListOf<Rope>()
             val charBuffer = CharArray(MAX_LEAF_SIZE)
 
@@ -599,7 +599,7 @@ sealed class Rope : Iterable<Char> {
             if (charAt(i) == '\n') {
                 numNewlinesToFind--
                 if (numNewlinesToFind == 0) {
-                    return i + 1 // Character after the (lineIdx-1)-th newline
+                    return i
                 }
             }
         }

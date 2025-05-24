@@ -19,7 +19,12 @@ import com.itsvks.code.component.CodeEditor
 import com.itsvks.code.language.JavaLanguage
 import com.itsvks.code.theme.AtomOneDarkTheme
 import com.itsvks.code.example.ui.theme.CodeEditorTheme
+import com.itsvks.code.language.KotlinLanguage
 import com.itsvks.code.rememberCodeEditorState
+import com.itsvks.code.theme.AtomOneLightTheme
+import com.itsvks.code.theme.DraculaTheme
+import com.itsvks.code.theme.JetBrainsDarkTheme
+import com.itsvks.code.theme.VsCodeDarkTheme
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
@@ -37,21 +42,21 @@ class MainActivity : ComponentActivity() {
                     val editorState = rememberCodeEditorState(
                         assets.open("View.java"),
                         language = JavaLanguage,
-                        theme = AtomOneDarkTheme
+                        theme = VsCodeDarkTheme
                     )
 
                     LaunchedEffect(Unit) {
                         delay(3000)
-//                        editorState.setInputStream(assets.open("temp.kt"))
-//                        editorState.language = KotlinLanguage
-//                        editorState.theme = AtomOneLightTheme
+                        editorState.setInputStream(assets.open("temp.kt"))
+                        editorState.language = KotlinLanguage
+                        editorState.theme = JetBrainsDarkTheme
                     }
 
                     CodeEditor(
                         state = editorState,
-                        softWrap = false,
-                        fontSize = 14.sp,
-                        gutterWidth = 48.dp,
+                        softWrap = true,
+                        initialFontSize = 14.sp,
+                        editable = true,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(innerPadding)
