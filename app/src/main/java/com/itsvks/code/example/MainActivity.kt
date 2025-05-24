@@ -1,6 +1,7 @@
 package com.itsvks.code.example
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -46,6 +47,8 @@ class MainActivity : ComponentActivity() {
                     )
 
                     LaunchedEffect(Unit) {
+                        showToast("Changing file in 3 seconds...")
+
                         delay(3000)
                         editorState.setInputStream(assets.open("temp.kt"))
                         editorState.language = KotlinLanguage
@@ -65,6 +68,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun showToast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 }
 

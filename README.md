@@ -8,6 +8,10 @@
 - [x] Font and theme customization
 - [x] Soft wrap support
 
+## Screenshots
+
+![img.png](screenshots/img.png)
+
 ## Installation
 
 Include the following line in your module-level `build.gradle.kts` (for Kotlin DSL) or `build.gradle` (for Groovy DSL) file, typically within the `dependencies` block:

@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -111,7 +112,8 @@ fun CodeEditor(
                             .fillMaxSize()
                             .then(if (!softWrap) Modifier.horizontalScroll(rememberScrollState()) else Modifier)
                             .background(theme.backgroundColor),
-                        state = listState
+                        state = listState,
+                        contentPadding = PaddingValues(vertical = 2.dp)
                     ) {
                         items(rope.lineCount, key = { it }) { lineIdx ->
                             Row {
@@ -120,7 +122,7 @@ fun CodeEditor(
                                 val lineStr = (lineIdx + 1).toString()
 
                                 Box(
-                                    contentAlignment = Alignment.CenterEnd,
+                                    contentAlignment = Alignment.TopEnd,
                                     modifier = Modifier
                                         .width(gutterWidth)
                                         .padding(end = horizontalPadding)
@@ -129,10 +131,17 @@ fun CodeEditor(
                                                 val width = size.width + horizontalPadding.toPx()
                                                 val height = max(size.width, lineHeight.toFloat())
 
-                                                drawRect(
-                                                    color = theme.gutterBgColor,
-                                                    size = Size(width, height)
-                                                )
+                                                if (isLineFocused) {
+                                                    drawRect(
+                                                        color = theme.activeLineColor,
+                                                        size = Size(width, height)
+                                                    )
+                                                } else {
+                                                    drawRect(
+                                                        color = theme.gutterBgColor,
+                                                        size = Size(width, height)
+                                                    )
+                                                }
 
                                                 drawLine(
                                                     color = theme.gutterBorderColor,
@@ -149,6 +158,7 @@ fun CodeEditor(
                                             color = theme.gutterTextColor,
                                             fontSize = fontSize,
                                             fontFamily = fontFamily,
+                                            lineHeight = fontSize,
                                             softWrap = false,
                                             overflow = TextOverflow.Visible
                                         )
@@ -167,19 +177,7 @@ fun CodeEditor(
                                     BasicTextField(
                                         value = textFieldValue,
                                         onValueChange = {
-                                            val cursorPos = it.selection.start
-                                            val text = it.text
-                                            val brackets = setOf('(', ')', '{', '}', '[', ']')
-
-                                            val bracketIndices = when {
-                                                cursorPos < text.length && text[cursorPos] in brackets ->
-                                                    findBracketPairIndices(text, cursorPos)
-
-                                                cursorPos > 0 && text[cursorPos - 1] in brackets ->
-                                                    findBracketPairIndices(text, cursorPos - 1)
-
-                                                else -> emptySet()
-                                            }
+                                            val bracketIndices = findBracketIndices(it)
 
                                             textFieldValue = TextFieldValue(
                                                 it.annotatedString.highlight(
@@ -206,14 +204,13 @@ fun CodeEditor(
                                             .onFocusChanged {
                                                 isLineFocused = it.isFocused
 
-                                                if (!it.isFocused) {
-                                                    textFieldValue = textFieldValue.copy(
-                                                        textFieldValue.annotatedString.highlight(
-                                                            theme = theme,
-                                                            syntaxHighlighter = syntaxHighlighter
-                                                        )
+                                                textFieldValue = textFieldValue.copy(
+                                                    textFieldValue.annotatedString.highlight(
+                                                        theme = theme,
+                                                        syntaxHighlighter = syntaxHighlighter,
+                                                        bracketIndices = if (it.isFocused) findBracketIndices(textFieldValue) else emptySet()
                                                     )
-                                                }
+                                                )
                                             },
                                         cursorBrush = SolidColor(theme.cursorColor),
                                         decorationBox = { innerTextField ->
@@ -241,4 +238,17 @@ fun CodeEditor(
             }
         }
     }
+}
+
+private fun findBracketIndices(it: TextFieldValue): Set<Int> {
+    val cursorPos = it.selection.start
+    val text = it.text
+    val brackets = setOf('(', ')', '{', '}', '[', ']')
+
+    val bracketIndices = when {
+        cursorPos < text.length && text[cursorPos] in brackets -> findBracketPairIndices(text, cursorPos)
+        cursorPos > 0 && text[cursorPos - 1] in brackets -> findBracketPairIndices(text, cursorPos - 1)
+        else -> emptySet()
+    }
+    return bracketIndices
 }
