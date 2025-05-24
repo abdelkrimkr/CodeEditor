@@ -36,6 +36,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +45,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itsvks.code.CodeEditorState
+import com.itsvks.code.core.bracketPairs
 import com.itsvks.code.core.rememberJetBrainsMonoFontFamily
 import com.itsvks.code.syntax.SyntaxHighlighterFactory
 import com.itsvks.code.theme.findBracketPairIndices
@@ -175,14 +177,38 @@ fun CodeEditor(
                                         onValueChange = {
                                             val bracketIndices = findBracketIndices(it)
 
+                                            val text = it.text
+                                            val cursor = it.selection.start
+
+                                            val shouldInsertPair = cursor > 0 &&
+                                                    bracketPairs.containsKey(text.getOrNull(cursor - 1)) &&
+                                                    (text.getOrNull(cursor) != bracketPairs[text[cursor - 1]]) &&
+                                                    it.text != textFieldValue.text
+
+                                            val updatedTextFieldValue = if (shouldInsertPair) {
+                                                val open = text[cursor - 1]
+                                                val close = bracketPairs[open] ?: error("Unmatched bracket")
+
+                                                val before = text.substring(0, cursor)
+                                                val after = text.substring(cursor)
+
+                                                TextFieldValue(
+                                                    text = before + close + after,
+                                                    selection = TextRange(cursor, cursor),
+                                                    composition = it.composition
+                                                )
+                                            } else {
+                                                it
+                                            }
+
                                             textFieldValue = TextFieldValue(
-                                                it.annotatedString.highlight(
+                                                updatedTextFieldValue.annotatedString.highlight(
                                                     theme = theme,
                                                     syntaxHighlighter = syntaxHighlighter,
-                                                    bracketIndices = bracketIndices
+                                                    bracketIndices = findBracketIndices(updatedTextFieldValue)
                                                 ),
-                                                selection = it.selection,
-                                                composition = it.composition
+                                                selection = updatedTextFieldValue.selection,
+                                                composition = updatedTextFieldValue.composition
                                             )
                                         },
                                         singleLine = !softWrap,

@@ -58,8 +58,9 @@ class MainActivity : ComponentActivity() {
                     CodeEditor(
                         state = editorState,
                         softWrap = true,
-                        initialFontSize = 14.sp,
+                        initialFontSize = 15.sp,
                         editable = true,
+                        enableZoomGestures = true,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(innerPadding)
