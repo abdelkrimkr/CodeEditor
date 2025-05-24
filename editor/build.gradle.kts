@@ -67,7 +67,7 @@ mavenPublishing {
     publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
     signAllPublications()
 
-    coordinates("io.github.itsvks19", "codeeditor", "1.0.0")
+    coordinates("io.github.itsvks19", "codeeditor", "1.2.0")
 
     pom {
         name = "CodeEditor"

@@ -21,7 +21,7 @@ Include the following line in your module-level `build.gradle.kts` (for Kotlin D
 ```kotlin
 // build.gradle.kts (Module: app)
 dependencies {
-    implementation("io.github.itsvks19:codeeditor:1.0.0")
+    implementation("io.github.itsvks19:codeeditor:1.2.0")
 }
 ```
 
@@ -30,7 +30,7 @@ dependencies {
 ```groovy
 // build.gradle (Module: app)
 dependencies {
-    implementation 'io.github.itsvks19:codeeditor:1.0.0'
+    implementation 'io.github.itsvks19:codeeditor:1.2.0'
 }
 ```
 
