@@ -42,14 +42,14 @@ class MainActivity : ComponentActivity() {
                 ) { innerPadding ->
                     val editorState = rememberCodeEditorState(
                         assets.open("View.java"),
-                        language = JavaLanguage,
-                        theme = VsCodeDarkTheme
+                        initialLanguage = JavaLanguage,
+                        initialTheme = VsCodeDarkTheme
                     )
 
                     LaunchedEffect(Unit) {
-                        showToast("Changing file in 3 seconds...")
+                        showToast("Changing file in 10 seconds...")
 
-                        delay(3000)
+                        delay(10000)
                         editorState.setInputStream(assets.open("temp.kt"))
                         editorState.language = KotlinLanguage
                         editorState.theme = JetBrainsDarkTheme

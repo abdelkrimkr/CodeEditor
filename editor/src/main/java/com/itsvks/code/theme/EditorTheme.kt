@@ -6,7 +6,6 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.util.fastForEach
-import com.itsvks.code.core.Rope
 import com.itsvks.code.syntax.SyntaxHighlighter
 import com.itsvks.code.syntax.Token
 import com.itsvks.code.syntax.TokenType
@@ -38,16 +37,13 @@ internal fun AnnotatedString.highlight(
     //toAnnotatedString()
 }
 
-internal fun Rope.highlightLine(
-    lineIdx: Int,
+internal fun String.highlight(
     theme: EditorTheme,
     syntaxHighlighter: SyntaxHighlighter,
     bracketIndices: Set<Int> = emptySet()
 ) = buildAnnotatedString {
-    val line = line(lineIdx).asCharSequence().trimEnd('\n', '\r')
-    val tokens = syntaxHighlighter.highlight(line.toString())
-
-    highlightToken(tokens, theme, line, bracketIndices)
+    val tokens = syntaxHighlighter.highlight(this@highlight)
+    highlightToken(tokens, theme, this@highlight, bracketIndices)
 }
 
 private fun AnnotatedString.Builder.highlightToken(

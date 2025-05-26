@@ -20,14 +20,14 @@ object JetBrainsDarkTheme : EditorTheme {
 
     override fun getStyleForToken(type: TokenType)= when (type) {
         TokenType.PLAIN -> TokenStyle(defaultTextColor)
-        TokenType.KEYWORD -> TokenStyle(Color(0xFFCC7832))
+        TokenType.KEYWORD -> TokenStyle(Color(0xFFCC7832), italic = true)
         TokenType.TYPE -> TokenStyle(Color(0xFF287BDE))
         TokenType.STRING -> TokenStyle(Color(0xFF6A8759))
         TokenType.COMMENT -> TokenStyle(Color(0xFF808080), italic = true)
         TokenType.NUMBER -> TokenStyle(Color(0xFF6897BB))
         TokenType.OPERATOR -> TokenStyle(Color(0xFF89DDFF))
         TokenType.PUNCTUATION -> TokenStyle(Color(0xFFA9B7C6))
-        TokenType.FUNCTION -> TokenStyle(Color(0xFFFFC66D), italic = true)
+        TokenType.FUNCTION -> TokenStyle(Color(0xFFFFC66D))
         TokenType.IDENTIFIER -> TokenStyle(defaultTextColor)
         TokenType.ANNOTATION -> TokenStyle(Color(0xFFBBB529))
         TokenType.MACRO -> TokenStyle(Color(0xFF9876AA))

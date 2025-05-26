@@ -1,14 +1,24 @@
 package com.itsvks.code.component
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -21,6 +31,7 @@ import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -35,6 +46,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
@@ -46,11 +59,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itsvks.code.CodeEditorState
 import com.itsvks.code.core.bracketPairs
+import com.itsvks.code.core.getLine
+import com.itsvks.code.core.lineCount
 import com.itsvks.code.core.rememberJetBrainsMonoFontFamily
 import com.itsvks.code.syntax.SyntaxHighlighterFactory
+import com.itsvks.code.theme.EditorTheme
 import com.itsvks.code.theme.findBracketPairIndices
 import com.itsvks.code.theme.highlight
-import com.itsvks.code.theme.highlightLine
+import kotlinx.coroutines.Dispatchers
 import my.nanihadesuka.compose.LazyColumnScrollbar
 import my.nanihadesuka.compose.ScrollbarSettings
 import kotlin.math.max
@@ -69,8 +85,9 @@ fun CodeEditor(
     var fontSize by remember { mutableStateOf(initialFontSize) }
     val fontFamily = rememberJetBrainsMonoFontFamily()
     val listState = rememberLazyListState()
-    val rope by remember { derivedStateOf { state.rope } }
     val theme = state.theme
+    val content by state.content.collectAsState(Dispatchers.IO)
+    val isLoading by state.isLoading.collectAsState(Dispatchers.IO)
 
     val syntaxHighlighter by remember {
         derivedStateOf {
@@ -119,7 +136,7 @@ fun CodeEditor(
                         state = listState,
                         verticalArrangement = Arrangement.spacedBy(1.dp)
                     ) {
-                        items(rope.lineCount, key = { it }) { lineIdx ->
+                        items(content.lineCount, key = { it.hashCode() }) { lineIdx ->
                             Row {
                                 var isLineFocused by remember { mutableStateOf(false) }
                                 var lineHeight by remember { mutableIntStateOf(0) }
@@ -168,8 +185,8 @@ fun CodeEditor(
                                         .fillMaxSize()
                                         .padding(horizontal = horizontalPadding)
                                 ) {
-                                    var textFieldValue by remember(lineIdx, rope) {
-                                        mutableStateOf(TextFieldValue(rope.highlightLine(lineIdx, theme, syntaxHighlighter)))
+                                    var textFieldValue by remember(lineIdx, content) {
+                                        mutableStateOf(TextFieldValue(content.getLine(lineIdx).highlight(theme, syntaxHighlighter)))
                                     }
 
                                     BasicTextField(
@@ -179,7 +196,7 @@ fun CodeEditor(
                                             updated = handleBracketPairMatch(updated, textFieldValue)
 
                                             textFieldValue = TextFieldValue(
-                                                updated.annotatedString.highlight(
+                                                updated.text.highlight(
                                                     theme = theme,
                                                     syntaxHighlighter = syntaxHighlighter,
                                                     bracketIndices = findBracketIndices(updated)
@@ -216,14 +233,7 @@ fun CodeEditor(
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()
-                                                    .then(if (isLineFocused) Modifier.drawWithCache {
-                                                        onDrawBehind {
-                                                            drawRect(
-                                                                color = theme.activeLineColor,
-                                                                topLeft = Offset(-horizontalPadding.toPx() + 1, 0f)//+1 for gutter border width
-                                                            )
-                                                        }
-                                                    } else Modifier)
+                                                    .drawActiveLineColor(isLineFocused, theme, horizontalPadding)
                                             ) {
                                                 innerTextField()
                                             }
@@ -236,8 +246,65 @@ fun CodeEditor(
                 }
             }
         }
+
+        AnimatedVisibility(
+            visible = isLoading,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopEnd)
+        ) {
+            val infiniteTransition = rememberInfiniteTransition(label = "rotation")
+
+            val angleOffset by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 360f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 1000, easing = LinearEasing),
+                ),
+                label = "angleOffset"
+            )
+
+            Spacer(
+                modifier = Modifier
+                    .size(20.dp)
+                    .padding(4.dp)
+                    .drawWithCache {
+                        onDrawBehind {
+                            val sweepAngle = 270f
+                            val diameter = size.minDimension
+                            val stroke = Stroke(width = 4f, cap = StrokeCap.Round)
+
+                            drawArc(
+                                color = theme.cursorColor,
+                                startAngle = angleOffset,
+                                sweepAngle = sweepAngle,
+                                useCenter = false,
+                                topLeft = Offset(
+                                    (size.width - diameter) / 2f,
+                                    (size.height - diameter) / 2f
+                                ),
+                                size = Size(diameter, diameter),
+                                style = stroke
+                            )
+                        }
+                    }
+            )
+        }
     }
 }
+
+private fun Modifier.drawActiveLineColor(
+    isLineFocused: Boolean,
+    theme: EditorTheme,
+    horizontalPadding: Dp
+) = this then if (isLineFocused) Modifier.drawWithCache {
+    onDrawBehind {
+        drawRect(
+            color = theme.activeLineColor,
+            topLeft = Offset(-horizontalPadding.toPx() + 1, 0f)//+1 for gutter border width
+        )
+    }
+} else Modifier
 
 private fun handleBracketPairMatch(
     newValue: TextFieldValue,

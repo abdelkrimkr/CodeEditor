@@ -1,6 +1,6 @@
 # CodeViewer
 
-**CodeViewer** is a high-performance, modern code view component for Android. It can handle files with **over 1 million lines** while maintaining smooth, responsive performance.
+**CodeViewer** is a high-performance code view component for Android. It can handle files with **over 1 million lines** while maintaining smooth, responsive performance.
 
 ## Features
 
