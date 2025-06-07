@@ -20,10 +20,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -50,6 +54,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,9 +63,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itsvks.code.CodeEditorState
+import com.itsvks.code.core.FoldableRange // Assuming FoldableRange is in this package
 import com.itsvks.code.core.bracketPairs
-import com.itsvks.code.core.getLine
-import com.itsvks.code.core.lineCount
 import com.itsvks.code.core.rememberJetBrainsMonoFontFamily
 import com.itsvks.code.syntax.SyntaxHighlighterFactory
 import com.itsvks.code.theme.EditorTheme
@@ -70,6 +74,20 @@ import kotlinx.coroutines.Dispatchers
 import my.nanihadesuka.compose.LazyColumnScrollbar
 import my.nanihadesuka.compose.ScrollbarSettings
 import kotlin.math.max
+
+sealed class DisplayLine {
+    abstract val originalLineIndex: Int
+
+    data class Code(
+        override val originalLineIndex: Int,
+    ) : DisplayLine()
+
+    data class FoldedMarker(
+        override val originalLineIndex: Int,
+        val endLine: Int,
+        val numberOfHiddenLines: Int
+    ) : DisplayLine()
+}
 
 @Composable
 fun CodeEditor(
@@ -86,8 +104,39 @@ fun CodeEditor(
     val fontFamily = rememberJetBrainsMonoFontFamily()
     val listState = rememberLazyListState()
     val theme = state.theme
-    val content by state.content.collectAsState(Dispatchers.IO)
+    val content by state.content.collectAsState(Dispatchers.IO) // This is List<String>
     val isLoading by state.isLoading.collectAsState(Dispatchers.IO)
+    val foldableRanges by state.foldableRanges.collectAsState(Dispatchers.IO)
+    val foldedLines by state.foldedLines.collectAsState(Dispatchers.IO)
+
+    val displayLines by remember(content, foldedLines, foldableRanges) {
+        derivedStateOf {
+            val originalContent = content
+            val currentDisplayLines = mutableListOf<DisplayLine>()
+            var currentOriginalLine = 0
+            while (currentOriginalLine < originalContent.size) {
+                val isFoldedStart = foldedLines.contains(currentOriginalLine)
+                if (isFoldedStart) {
+                    val range = foldableRanges.find { it.startLine == currentOriginalLine }
+                    if (range != null) {
+                        currentDisplayLines.add(DisplayLine.FoldedMarker(
+                            originalLineIndex = currentOriginalLine,
+                            endLine = range.endLine,
+                            numberOfHiddenLines = range.endLine - range.startLine - 1
+                        ))
+                        currentOriginalLine = range.endLine + 1
+                    } else {
+                        currentDisplayLines.add(DisplayLine.Code(currentOriginalLine))
+                        currentOriginalLine++
+                    }
+                } else {
+                    currentDisplayLines.add(DisplayLine.Code(currentOriginalLine))
+                    currentOriginalLine++
+                }
+            }
+            currentDisplayLines
+        }
+    }
 
     val syntaxHighlighter by remember {
         derivedStateOf {
@@ -103,6 +152,9 @@ fun CodeEditor(
             )
         }
     }
+    // Shared lineHeight for gutter calculation, updated by BasicTextField or default for FoldedMarker
+    var sharedLineHeight by remember { mutableIntStateOf((fontSize.value * 1.2f).toInt()) }
+
 
     Box(
         modifier = modifier
@@ -136,28 +188,29 @@ fun CodeEditor(
                         state = listState,
                         verticalArrangement = Arrangement.spacedBy(1.dp)
                     ) {
-                        items(content.lineCount, key = { it.hashCode() }) { lineIdx ->
-                            Row {
-                                var isLineFocused by remember { mutableStateOf(false) }
-                                var lineHeight by remember { mutableIntStateOf(0) }
-                                val lineStr = (lineIdx + 1).toString()
+                        itemsIndexed(displayLines, key = { _, item -> item.originalLineIndex }) { _, displayLineItem ->
+                            val lineIdx = displayLineItem.originalLineIndex
+                            var isLineFocused by remember(lineIdx) { mutableStateOf(false) }
 
+                            Row(modifier = Modifier.wrapContentHeight()) {
+                                // Gutter Box
                                 Box(
-                                    contentAlignment = Alignment.TopEnd,
+                                    contentAlignment = Alignment.CenterEnd, // Center content vertically and align text to end
                                     modifier = Modifier
                                         .width(gutterWidth)
-                                        .padding(end = horizontalPadding)
+                                        .padding(end = horizontalPadding / 2) // Reduced padding for fold marker space
+                                        .heightIn(min = (fontSize.value * 1.2f).dp) // Ensure min height for clickability
                                         .drawWithCache {
                                             onDrawBehind {
-                                                val width = size.width + horizontalPadding.toPx()
-                                                val height = max(size.height, lineHeight.toFloat())
+                                                val width = size.width + horizontalPadding.toPx() / 2
+                                                val height = max(size.height, sharedLineHeight.toFloat())
+                                                val isActiveLine = isLineFocused && displayLineItem is DisplayLine.Code
 
                                                 drawRect(
-                                                    color = if (isLineFocused) theme.activeLineColor else theme.gutterBgColor,
+                                                    color = if (isActiveLine) theme.activeLineColor else theme.gutterBgColor,
                                                     topLeft = Offset(0f, (-0.5f).dp.toPx()),
                                                     size = Size(width, height + 1.5f.dp.toPx())
                                                 )
-
                                                 drawLine(
                                                     color = theme.gutterBorderColor,
                                                     start = Offset(width, (-0.5f).dp.toPx()),
@@ -167,78 +220,128 @@ fun CodeEditor(
                                             }
                                         }
                                 ) {
-                                    DisableSelection {
-                                        Text(
-                                            text = lineStr,
-                                            color = theme.gutterTextColor,
-                                            fontSize = fontSize,
-                                            fontFamily = fontFamily,
-                                            lineHeight = fontSize,
-                                            softWrap = false,
-                                            overflow = TextOverflow.Visible
-                                        )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        val foldableRange = foldableRanges.find { it.startLine == lineIdx }
+                                        if (foldableRange != null) {
+                                            val isFolded = foldedLines.contains(lineIdx)
+                                            ClickableText(
+                                                text = AnnotatedString(if (isFolded) "[+]" else "[-]"),
+                                                onClick = { state.toggleFold(lineIdx) },
+                                                style = TextStyle(
+                                                    color = theme.gutterTextColor.copy(alpha = 0.8f),
+                                                    fontSize = fontSize * 0.8f // Smaller for marker
+                                                ),
+                                                modifier = Modifier.padding(end = horizontalPadding / 2)
+                                            )
+                                        } else {
+                                            // Spacer to align line numbers when no fold marker
+                                            Spacer(Modifier.width((fontSize.value * 0.8f * 3).dp + horizontalPadding/2))
+                                        }
+                                        DisableSelection {
+                                            Text(
+                                                text = (lineIdx + 1).toString(),
+                                                color = theme.gutterTextColor,
+                                                fontSize = fontSize,
+                                                fontFamily = fontFamily,
+                                                lineHeight = fontSize,
+                                                softWrap = false,
+                                                overflow = TextOverflow.Visible
+                                            )
+                                        }
                                     }
                                 }
 
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = horizontalPadding)
-                                ) {
-                                    var textFieldValue by remember(lineIdx, content) {
-                                        mutableStateOf(TextFieldValue(content.getLine(lineIdx).highlight(theme, syntaxHighlighter)))
-                                    }
+                                // Line Content Box
+                                when (displayLineItem) {
+                                    is DisplayLine.Code -> {
+                                        var textFieldValue by remember(lineIdx, content.getOrNull(lineIdx)) {
+                                            val currentLineText = content.getOrNull(lineIdx) ?: ""
+                                            mutableStateOf(TextFieldValue(currentLineText.highlight(theme, syntaxHighlighter)))
+                                        }
 
-                                    BasicTextField(
-                                        value = textFieldValue,
-                                        onValueChange = {
-                                            var updated = handleAutoIndent(it, textFieldValue)
-                                            updated = handleBracketPairMatch(updated, textFieldValue)
+                                        BasicTextField(
+                                            value = textFieldValue,
+                                            onValueChange = {
+                                                var updated = handleAutoIndent(it, textFieldValue)
+                                                updated = handleBracketPairMatch(updated, textFieldValue)
 
-                                            textFieldValue = TextFieldValue(
-                                                updated.text.highlight(
-                                                    theme = theme,
-                                                    syntaxHighlighter = syntaxHighlighter,
-                                                    bracketIndices = findBracketIndices(updated)
-                                                ),
-                                                selection = updated.selection,
-                                                composition = updated.composition
-                                            )
-                                        },
-                                        singleLine = !softWrap,
-                                        readOnly = !editable,
-                                        textStyle = TextStyle(
-                                            fontSize = fontSize,
-                                            fontFamily = fontFamily,
-                                            color = theme.defaultTextColor
-                                        ),
-                                        onTextLayout = {
-                                            lineHeight = it.size.height
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .onFocusChanged {
-                                                isLineFocused = it.isFocused
+                                                val newText = updated.text // This is AnnotatedString
+                                                // state.updateLine needs a String
+                                                state.updateLine(lineIdx, newText.text)
 
-                                                textFieldValue = textFieldValue.copy(
-                                                    textFieldValue.annotatedString.highlight(
+
+                                                textFieldValue = TextFieldValue(
+                                                    newText.highlight( // Re-highlight after potential structural changes by auto-indent
                                                         theme = theme,
                                                         syntaxHighlighter = syntaxHighlighter,
-                                                        bracketIndices = if (it.isFocused) findBracketIndices(textFieldValue) else emptySet()
-                                                    )
+                                                        bracketIndices = findBracketIndices(updated)
+                                                    ),
+                                                    selection = updated.selection,
+                                                    composition = updated.composition
                                                 )
                                             },
-                                        cursorBrush = SolidColor(theme.cursorColor),
-                                        decorationBox = { innerTextField ->
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .drawActiveLineColor(isLineFocused, theme, horizontalPadding)
-                                            ) {
-                                                innerTextField()
+                                            singleLine = !softWrap,
+                                            readOnly = !editable,
+                                            textStyle = TextStyle(
+                                                fontSize = fontSize,
+                                                fontFamily = fontFamily,
+                                                color = theme.defaultTextColor,
+                                                lineHeight = fontSize * 1.2f // Ensure consistent line height
+                                            ),
+                                            onTextLayout = {
+                                                sharedLineHeight = it.size.height
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = horizontalPadding)
+                                                .onFocusChanged { focusState ->
+                                                    isLineFocused = focusState.isFocused
+                                                    if (focusState.isFocused) {
+                                                        // Re-highlight with bracket matching when focused
+                                                        textFieldValue = textFieldValue.copy(
+                                                            annotatedString = textFieldValue.annotatedString.highlight(
+                                                                theme = theme,
+                                                                syntaxHighlighter = syntaxHighlighter,
+                                                                bracketIndices = findBracketIndices(textFieldValue)
+                                                            )
+                                                        )
+                                                    } else {
+                                                        // Re-highlight without specific bracket matching when unfocused
+                                                        textFieldValue = textFieldValue.copy(
+                                                            annotatedString = textFieldValue.annotatedString.highlight(
+                                                                theme = theme,
+                                                                syntaxHighlighter = syntaxHighlighter,
+                                                                bracketIndices = emptySet()
+                                                            )
+                                                        )
+                                                    }
+                                                },
+                                            cursorBrush = SolidColor(theme.cursorColor),
+                                            decorationBox = { innerTextField ->
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .drawActiveLineColor(isLineFocused, theme, horizontalPadding)
+                                                ) {
+                                                    innerTextField()
+                                                }
                                             }
-                                        }
-                                    )
+                                        )
+                                    }
+                                    is DisplayLine.FoldedMarker -> {
+                                        val lineText = content.getOrElse(lineIdx) { "" }
+                                        Text(
+                                            text = "$lineText ... (${displayLineItem.numberOfHiddenLines} lines hidden)",
+                                            fontSize = fontSize,
+                                            fontFamily = fontFamily,
+                                            color = theme.defaultTextColor.copy(alpha = 0.7f),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = horizontalPadding, vertical = ((fontSize.value * 1.2f - fontSize.value) / 2f).dp) // Align with BasicTextField's effective vertical padding
+                                                .heightIn(min = (fontSize.value * 1.2f).dp), // Match BasicTextField line height
+                                            lineHeight = fontSize * 1.2f
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -246,6 +349,7 @@ fun CodeEditor(
                 }
             }
         }
+
 
         AnimatedVisibility(
             visible = isLoading,
@@ -294,17 +398,18 @@ fun CodeEditor(
 }
 
 private fun Modifier.drawActiveLineColor(
-    isLineFocused: Boolean,
+    isLineFocused: Boolean, // This should be specific to DisplayLine.Code
     theme: EditorTheme,
     horizontalPadding: Dp
 ) = this then if (isLineFocused) Modifier.drawWithCache {
     onDrawBehind {
         drawRect(
             color = theme.activeLineColor,
-            topLeft = Offset(-horizontalPadding.toPx() + 1, 0f)//+1 for gutter border width
+            topLeft = Offset(-horizontalPadding.toPx() + 1, 0f) // +1 for gutter border width
         )
     }
 } else Modifier
+
 
 private fun handleBracketPairMatch(
     newValue: TextFieldValue,

@@ -49,29 +49,37 @@ internal fun String.highlight(
 private fun AnnotatedString.Builder.highlightToken(
     tokens: List<Token>,
     theme: EditorTheme,
-    line: CharSequence,
+    lineString: CharSequence, // Changed from 'line: CharSequence' to 'lineString' for clarity
     bracketIndices: Set<Int>
 ) {
-    tokens.fastForEach { token ->
-        val baseStyle = theme.getStyleForToken(token.type)
-        val start = token.start
-        val end = token.end
+    // 1. Append the entire line string without any initial style.
+    append(lineString.toString())
 
-        for (i in start until end) {
-            val char = line[i]
-            val isBracket = i in bracketIndices
-            val style = if (isBracket) {
-                baseStyle.copy(
-                    color = Color.Yellow,
-                    background = Color(0x33FFFFFF),
-                    fontWeight = FontWeight.Bold
-                )
-            } else {
-                baseStyle
+    // 2. Apply base styles for each token.
+    tokens.fastForEach { token ->
+        val style = theme.getStyleForToken(token.type)
+        // Ensure token range is valid for the lineString length.
+        // While tokens should be valid, defensive check is good.
+        val effectiveStart = token.start.coerceIn(0, lineString.length)
+        val effectiveEnd = token.end.coerceIn(effectiveStart, lineString.length)
+        if (effectiveStart < effectiveEnd) {
+            addStyle(style, effectiveStart, effectiveEnd)
+        }
+    }
+
+    // 3. Apply special styling for bracket characters.
+    // This will overlay or merge with the token styles.
+    if (bracketIndices.isNotEmpty()) {
+        val bracketStyle = SpanStyle(
+            color = Color.Yellow, // Consider making this configurable in EditorTheme
+            background = Color(0x33FFFFFF), // Same
+            fontWeight = FontWeight.Bold
+        )
+        bracketIndices.forEach { index ->
+            // Ensure index is valid
+            if (index >= 0 && index < lineString.length) {
+                addStyle(bracketStyle, index, index + 1)
             }
-            pushStyle(style)
-            append(char)
-            pop()
         }
     }
 }

@@ -5,6 +5,26 @@ import com.itsvks.code.language.Language
 // Implementation of the SyntaxHighlighter that uses Language definitions
 class LanguageBasedSyntaxHighlighter(private val language: Language) : SyntaxHighlighter {
 
+    private val keywordPattern: Regex? = language.keywords
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString(separator = "|", prefix = "\b(?:", postfix = ")\b")
+        ?.toRegex()
+
+    private val typePattern: Regex? = language.types
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString(separator = "|", prefix = "\b(?:", postfix = ")\b")
+        ?.toRegex()
+
+    private val operatorPattern: Regex? = language.operators
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString(separator = "|") { Regex.escape(it) }
+        ?.toRegex()
+
+    private val punctuationPattern: Regex? = language.punctuation
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString(separator = "|") { Regex.escape(it) }
+        ?.toRegex()
+
     override fun highlight(text: String): List<Token> {
         val tokens = mutableListOf<Token>()
 
@@ -48,46 +68,20 @@ class LanguageBasedSyntaxHighlighter(private val language: Language) : SyntaxHig
             findAndAddPattern(text, pattern, TokenType.STATIC, tokens)
         }
 
-        for (keyword in language.keywords) {
-            val pattern = "\\b$keyword\\b".toRegex()
-            val results = pattern.findAll(text)
-            for (result in results) {
-                if (!isInExistingToken(result.range.first, tokens)) {
-                    tokens.add(Token(TokenType.KEYWORD, result.range, result.value))
-                }
-            }
+        keywordPattern?.let { pattern ->
+            findAndAddPattern(text, pattern, TokenType.KEYWORD, tokens)
         }
 
-        for (type in language.types) {
-            val pattern = "\\b$type\\b".toRegex()
-            val results = pattern.findAll(text)
-            for (result in results) {
-                if (!isInExistingToken(result.range.first, tokens)) {
-                    tokens.add(Token(TokenType.TYPE, result.range, result.value))
-                }
-            }
+        typePattern?.let { pattern ->
+            findAndAddPattern(text, pattern, TokenType.TYPE, tokens)
         }
 
-        for (operator in language.operators) {
-            val escapedOperator = Regex.escape(operator)
-            val pattern = escapedOperator.toRegex()
-            val results = pattern.findAll(text)
-            for (result in results) {
-                if (!isInExistingToken(result.range.first, tokens)) {
-                    tokens.add(Token(TokenType.OPERATOR, result.range, result.value))
-                }
-            }
+        operatorPattern?.let { pattern ->
+            findAndAddPattern(text, pattern, TokenType.OPERATOR, tokens)
         }
 
-        for (punct in language.punctuation) {
-            val escapedPunct = Regex.escape(punct)
-            val pattern = escapedPunct.toRegex()
-            val results = pattern.findAll(text)
-            for (result in results) {
-                if (!isInExistingToken(result.range.first, tokens)) {
-                    tokens.add(Token(TokenType.PUNCTUATION, result.range, result.value))
-                }
-            }
+        punctuationPattern?.let { pattern ->
+            findAndAddPattern(text, pattern, TokenType.PUNCTUATION, tokens)
         }
 
         val identifierPattern = "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b".toRegex()
