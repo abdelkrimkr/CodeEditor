@@ -265,17 +265,20 @@ fun CodeEditor(
                                                 var updated = handleAutoIndent(it, textFieldValue)
                                                 updated = handleBracketPairMatch(updated, textFieldValue)
 
-                                                val newText = updated.text // This is AnnotatedString
+                                                val newText = updated.text // This is String, from TextFieldValue.text
                                                 // state.updateLine needs a String
-                                                state.updateLine(lineIdx, newText.text)
+                                                state.updateLine(lineIdx, newText)
 
-
-                                                textFieldValue = TextFieldValue(
-                                                    newText.highlight( // Re-highlight after potential structural changes by auto-indent
+                                                // textFieldValue needs an AnnotatedString.
+                                                // newText (String) needs to be highlighted to become AnnotatedString.
+                                                val highlightedAnnotatedString = newText.highlight( // Re-highlight after potential structural changes by auto-indent
                                                         theme = theme,
                                                         syntaxHighlighter = syntaxHighlighter,
                                                         bracketIndices = findBracketIndices(updated)
-                                                    ),
+                                                    )
+
+                                                textFieldValue = TextFieldValue(
+                                                    annotatedString = highlightedAnnotatedString,
                                                     selection = updated.selection,
                                                     composition = updated.composition
                                                 )
